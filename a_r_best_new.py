@@ -156,13 +156,13 @@ def generate(adv, y, TFD, FD, TD, conf, sg, evalu=None, verbose = False):
 
     for k in tqdm(range(4 * conf['itrs'])):   
         m =  k + 1 #np.min([k+1, 7])
-        p= 1 / (k+1 - 1.4 + conf['k_div']-0.1) #1/
+        p= 1 / (k+1 - 1.4 + conf['k_div']-0.1) #1 / (k+1 - 1.4 + conf['k_div']-0.1)
         n_std_thresh_stationary = 2.5 #3
         r_args = {'p': 1, 'n_std_thresh_stationary': n_std_thresh_stationary}
 
         #FD = configure_attack(FD, start=conf['FD'], m=m, power=0.85, delta=0, alpha_factor=1, max_iter=1)
-        FD = configure_attack(FD, start=conf['FD'], m=m, power=0.85, delta=0, alpha_factor=1, max_iter=1)
-        TFD = configure_attack(TFD, start=0.0007, m=m, power=1, delta=0, alpha_factor=1, max_iter=1)
+        FD = configure_attack(FD, start=conf['FD'], m=m, power=0.85, delta=0, alpha_factor=1, max_iter=1) #0.85
+        TFD = configure_attack(TFD, start=0.0007, m=m, power=0.9, delta=0, alpha_factor=1, max_iter=1) #0.9
         TD = configure_attack(TD, start=0.0002, m=m, power=1, delta=0, alpha_factor=1, max_iter=1)
 
         adv = TFD.generate(adv, y, **r_args)[1]
@@ -213,11 +213,9 @@ def log_stats(orig, adv, y, eval_asv, eval_cm, bb_asv, bb_cm, tester, id, input,
 def init(config, device):
     config["STFT_Attack"]["length"] = config["length"]
      
-    #reduce_conf = {'stationary': True, 'win': 'kaiser_window', 'n_fft': 1024, 'hop_length': 256, 'win_length': 1024, 'device': device, 'freq_mask_smooth_hz': 1000, 'time_mask_smooth_ms': 100, 'padding':0} 
-    
-    #reduce_conf = {'stationary': True, 'win': 'hann_window', 'n_fft': 1024, 'hop_length': 256, 'win_length': 1024, 'device': device, 'freq_mask_smooth_hz': 500, 'time_mask_smooth_ms': 50, 'padding':0}
+    #reduce_conf = {'stationary': True, 'win': 'kaiser_window', 'n_fft': 1024, 'hop_length': 256, 'win_length': 1024, 'device': device, 'freq_mask_smooth_hz': 500, 'time_mask_smooth_ms': 50, 'padding':0}
 
-    reduce_conf = {'stationary': True, 'win': 'kaiser_window', 'n_fft': 1024, 'hop_length': 256, 'win_length': 1024, 'device': device, 'freq_mask_smooth_hz': 500, 'time_mask_smooth_ms': 50, 'padding':0}
+    reduce_conf = {'stationary': True, 'win': 'kaiser_window', 'n_fft': 2048, 'hop_length': 256, 'win_length': 2048, 'device': device, 'freq_mask_smooth_hz': 500, 'time_mask_smooth_ms': 50, 'padding':0}
 
     TD = get_attacker(config, attack_type = "TIME_DOMAIN_ATTACK", system = "ADVSR", r_c = reduce_conf, device = device) 
     FD = get_attacker(config, attack_type = "FFT_Attack", system = "ADVSR", r_c = reduce_conf, device = device) 
