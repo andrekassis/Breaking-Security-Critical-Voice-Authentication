@@ -1,0 +1,24 @@
+{
+    "system": "ADVSR",
+	"eer": -40.8154,
+	"logits": true, 
+	"asv_args": {
+		"base": "trained_models/asv/lpms/train/",
+		"fgmmfile": "exp/full_ubm/final_ubm.txt",
+		"ivector_extractor": "exp/extractor/final_ie.txt",
+		"plda_mdl": "exp/ivectors_train/plda.txt",
+		"ivector_mean": "exp/ivectors_train/mean.vec" 
+	},
+	"extractor": {
+		"fn": "ASVLps",
+		"args": {
+			"n_fft": 128,
+            "hop_size": 64,
+			"window_length": 128,
+			"ref": 1.0,
+ 			"amin": 1e-30, 
+			"power": 2
+		}
+	},
+    "flip_label": false	
+}

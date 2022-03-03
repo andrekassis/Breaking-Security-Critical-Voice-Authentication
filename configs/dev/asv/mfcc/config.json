@@ -1,0 +1,30 @@
+{
+    "system": "ADVSR",
+	"eer": -10.5635,
+	"logits": true, 
+	"asv_args": {
+		"base": "trained_models/asv/mfcc/dev/",
+		"fgmmfile": "exp/full_ubm/final_ubm.txt",
+		"ivector_extractor": "exp/extractor/final_ie.txt",
+		"plda_mdl": "exp/ivectors_train/plda.txt",
+		"ivector_mean": "exp/ivectors_train/mean.vec" 
+	},
+	"extractor": {
+		"fn": "mfcc",
+		"args": {
+			"sampling_rate": 16000, 
+			"num_mels": 30, 
+			"fmin": 20,
+			"fmax": 7600,
+			"top_db": 80,
+			"n_mfcc": 24,
+			"n_fft": 400,
+            "hop_size": 160,
+			"window_length": 400,
+			"ref": 1.0,
+ 			"amin": 1e-30, 
+			"power": 2
+		}
+	},
+    "flip_label": false	
+}

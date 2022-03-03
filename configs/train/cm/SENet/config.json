@@ -1,0 +1,62 @@
+{
+    "system": "ADVCM",
+	"path": "trained_models/cm/SENet/train/model.pth",
+	"eer": -0.010745048522949219,
+	"logits": true, 
+	"state_dict": "state_dict",
+    "arch": {
+	    "type": "se_resnet12",
+		"requires_device": false,
+        "args": {}
+    },
+    "loss": {
+        "type": "NllLoss",
+		"requires_device": false,
+	    "args": {}
+    },
+	"extractor": {
+		"fn": "CMLps",
+		"args": {
+		    "n_fft": 1724,
+                    "hop_size": 130,
+	            "window_length": 1724,
+		    "ref": 1.0,
+ 		    "amin": 1e-30, 
+		    "max_len": 600,
+		    "power": 2
+		}
+	},
+    "flip_label": false,
+	"training_parameters": {
+		"num_epochs": 100,
+		"data_loader": {
+			"batch_size": 64,
+			"shuffle": true,
+			"num_workers": 2,
+			"validation_split": 0.0
+		},
+		"optimizer": {
+			"type": "Adam",
+			"params": {
+			    "lr": 0.001,
+				"betas": [
+				          0.9,
+						  0.999
+				         ],
+				"eps": 1e-09,
+		        "weight_decay": 0.001,
+				"amsgrad": true
+			}
+		},
+		"scheduler": {
+			"type": "rawGATScheduler",
+			"params": {}
+		},
+		"seed": 2019,
+		"no_best_epoch_num": 5,
+		"val_metric": "acc",
+		"eval_mode_for_validation": true,
+		"sampler": null,
+		"labels": "train.lab"
+	}
+}

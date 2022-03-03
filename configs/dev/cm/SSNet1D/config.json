@@ -1,0 +1,52 @@
+{
+    "system": "ADVCM",
+	"path": "trained_models/cm/SSNet1D/dev/model.pth",
+	"eer": 0.3997,
+	"logits": false, 
+	"state_dict": "model_state_dict",
+    "arch": {
+	    "type": "SSDNet1D",
+		"requires_device": false,
+        "args": {}
+    },
+    "loss": {
+        "type": "SSNet_loss",
+		"requires_device": true,
+	    "args": {
+	        "protocol": "labels.txt"
+	    }
+	},
+	"extractor": {
+		"fn": "Pad",
+		"args": {
+	        "max_len": 96000
+		}
+	},
+    "flip_label": true,
+	"training_parameters": {
+		"num_epochs": 100,
+		"data_loader": {
+			"batch_size": 32,
+			"shuffle": true,
+			"num_workers": 4
+		},
+		"optimizer": {
+			"type": "Adam",
+			"params": {
+			    "lr": 0.001
+			}
+		},
+		"scheduler": {
+			"type": "SSNetScheduler",
+			"params": {
+				"gamma": 0.95
+			}
+		},
+		"seed": null,
+		"no_best_epoch_num": 100,
+		"val_metric": "eer",
+		"eval_mode_for_validation": true,
+		"sampler": null,
+		"labels": "dev.lab"
+	}	
+}

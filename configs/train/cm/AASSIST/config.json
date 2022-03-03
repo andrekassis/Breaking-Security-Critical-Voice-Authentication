@@ -1,0 +1,73 @@
+{
+    "system": "ADVCM",
+	"path": "trained_models/cm/AASSIST/train/model.pth",
+	"eer": 1.4938158988952637,
+	"logits": true,
+	"state_dict": null,
+    "arch": {
+	"type": "AASSIST",
+	"requires_device": false,
+        "args": {
+			"d_args":   {
+                "architecture": "AASIST",
+                "nb_samp": 64600,
+                "first_conv": 128,
+                "filts": [70, [1, 32], [32, 32], [32, 64], [64, 64]],
+                "gat_dims": [64, 32],
+                "pool_ratios": [0.5, 0.7, 0.5, 0.5],
+                "temperatures": [2.0, 2.0, 100.0, 100.0]
+			}
+		}
+    },
+    "loss": {
+        "type": "CEL",
+		"requires_device": true,
+	    "args": {
+	        "weights": [
+			    0.1, 
+			    0.9
+			]
+		}
+    },
+	"extractor": {
+		"fn": "Pad",
+		"args": {
+	        "max_len": 64600
+		}
+	},
+    "flip_label": false,
+	"training_parameters": {
+		"num_epochs": 100,
+		"data_loader": {
+			"batch_size": 24,
+			"shuffle": true
+		},
+		"optimizer": {
+			"type": "Adam",
+			"params": {
+				"amsgrad": false,
+				"betas": [0.9, 0.999],
+			    "lr": 0.0001,
+		        "weight_decay": 0.0001
+			}
+		},
+		"scheduler": {
+			"type": "AASSISTScheduler",
+			"params": {
+				"n_epochs": 100,
+				"steps_per_epoch": 25380,
+				"base_lr": 0.0001,
+				"lr_min": 0.000005
+			}
+		},
+		"seed": 1234,
+		"no_best_epoch_num": 100,
+		"val_metric": "loss",
+		"eval_mode_for_validation": true,
+                "train_args": {
+		            "Freq_aug":false
+	        },
+		"sampler": null,
+		"labels": "train.lab"
+	}
+}

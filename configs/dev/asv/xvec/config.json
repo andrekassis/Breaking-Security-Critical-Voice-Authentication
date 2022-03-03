@@ -1,0 +1,31 @@
+{
+    "system": "ADVSR",
+	"eer": -10.5635,
+	"logits": true, 
+	"asv_args": {
+		"base": "trained_models/asv/xvec/dev/",
+		"fgmmfile": null,
+		"ivector_extractor": "exp/model.pth",
+		"plda_mdl": "exp/plda.txt",
+		"ivector_mean": "exp/mean.vec",
+	        "transform": "exp/matrix.txt"	
+	},
+	"extractor": {
+		"fn": "mfcc",
+		"args": {
+			"sampling_rate": 16000, 
+			"num_mels": 30, 
+			"fmin": 20,
+			"fmax": 7600,
+			"top_db": 80,
+			"n_mfcc": 30,
+			"n_fft": 400,
+                        "hop_size": 160,
+			"window_length": 400,
+			"ref": 1.0,
+ 			"amin": 1e-30, 
+			"power": 2
+		}
+	},
+    "flip_label": false	
+}

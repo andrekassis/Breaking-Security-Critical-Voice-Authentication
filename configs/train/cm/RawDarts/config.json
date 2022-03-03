@@ -1,0 +1,64 @@
+{
+    "system": "ADVCM",
+        "path": "trained_models/cm/pcdarts_raw/train/model.pth",
+        "eer": 0.9611527323722839,
+        "logits": true,
+        "state_dict": null,
+    "arch": {
+        "type": "DartsRaw",
+        "requires_device": false,
+        "args": {
+	        "drop_path_prob": 0.0,
+			"C": 64,
+			"layers": 8,
+			"num_classes": 2,
+			"genotype": "Genotype(normal=[('dil_conv_5', 1), ('dil_conv_3', 0), ('dil_conv_5', 1), ('dil_conv_5', 2), ('std_conv_5', 2), ('skip_connect', 3), ('std_conv_5', 2), ('skip_connect', 4)], normal_concat=range(2, 6), reduce=[('max_pool_3', 0), ('std_conv_3', 1), ('dil_conv_3', 0), ('dil_conv_3', 2), ('skip_connect', 0), ('dil_conv_5', 2), ('dil_conv_3', 0), ('avg_pool_3', 1)], reduce_concat=range(2, 6))",
+			"gru_hsize": 1024,
+			"gru_layers": 3
+        }
+    },
+    "loss": {
+        "type": "P2SGradLoss",
+        "requires_device": false,
+        "args": {}
+    },
+        "extractor": {
+                "fn": "Pad",
+                "args": {
+		            "max_len": 64000
+                }
+        },
+    "flip_label": false,
+	"training_parameters": {
+		"num_epochs": 100,
+		"data_loader": {
+			"batch_size": 32,
+			"shuffle": true,
+			"num_workers": 0,
+			"pin_memory": true,
+			"drop_last": true
+		},
+		"optimizer": {
+			"type": "Adam",
+			"params": {
+			    "lr": 5e-5,
+		        "weight_decay": 3e-4
+			}
+		},
+		"scheduler": {
+			"type": "DartsScheduler",
+			"params": {
+			    "lr_min": 2e-5,
+		        "num_epochs": 100
+			}
+		},
+		"drop_path_prob": 0.0,
+		"seed": null,
+		"no_best_epoch_num": 100,
+		"val_metric": "loss",
+		"eval_mode_for_validation": true,
+		"sampler": null,
+		"train_args": {},
+		"labels": "train.lab"
+	}
+}

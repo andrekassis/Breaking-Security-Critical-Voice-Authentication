@@ -1,0 +1,69 @@
+{
+    "system": "ADVCM",
+        "path": "trained_models/cm/Channel-wise-Gated-Res2Net/train/mcg/model.pth",
+        "eer": 0.09140881150960922,
+        "logits": false, 
+        "state_dict": null,
+    "arch": {
+        "type": "Detector",
+        "requires_device": false,
+        "args": {
+	    "MODEL_SELECT": 25,
+            "GATE_REDUCTION": 4
+        }
+    },
+    "loss": {
+        "type": "NllLoss",
+        "requires_device": false,
+        "args": {}
+    },
+        "extractor": {
+                "fn": "CQT",
+                "args": {
+                    "sr":16000,
+					"hop_length": 256,
+					"n_bins": 432,
+					"bins_per_octave": 48,
+					"window": "hann",
+					"fmin": 15,
+					"truncate_len": 400,
+					"ref": 1.0,
+					"amin": 1e-30
+                }
+        },
+    "flip_label": true,
+	"training_parameters": {
+		"num_epochs": 20,
+		"data_loader": {
+			"batch_size": 32,
+			"shuffle": true,
+			"num_workers": 2,
+			"pin_memory": true
+		},
+		"optimizer": {
+			"type": "Adam",
+			"params": {
+				"betas": [
+				          0.9, 
+						  0.98
+						 ],
+				"eps": 1e-09, 
+				"weight_decay": 1e-4,
+				"lr": 3e-4,
+				"amsgrad": true
+			}
+		},
+		"scheduler": {
+			"type": "Res2NetScheduler",
+			"params": {
+			    "n_warmup_steps": 1000
+			}
+		},
+		"seed": 0,
+		"no_best_epoch_num": 100,
+		"val_metric": "acc",
+		"eval_mode_for_validation": true,
+		"sampler": null,
+		"labels": "train.lab"
+		}
+}

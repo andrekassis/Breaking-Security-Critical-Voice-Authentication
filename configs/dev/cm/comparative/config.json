@@ -1,0 +1,54 @@
+{
+    "system": "ADVCM",
+        "path": "trained_models/cm/comparative/dev/model.pth",
+        "eer": 0.9978963732719421,
+        "logits": true,
+        "state_dict": null,
+    "arch": {
+        "type": "Comp",
+        "requires_device": false,
+        "args": {
+	        "in_dim": 1,
+			"out_dim": 1
+        }
+    },
+    "loss": {
+        "type": "P2SGradLoss",
+        "requires_device": false,
+        "args": {}
+    },
+        "extractor": {
+                "fn": "Null",
+                "args": {}
+        },
+    "flip_label": false,
+	"training_parameters": {
+		"num_epochs": 100,
+		"data_loader": {
+			"batch_size": 64,
+			"shuffle": false,
+			"num_workers": 0
+		},
+		"optimizer": {
+			"type": "Adam",
+			"params": {
+			    "lr": 0.0003,
+		        "weight_decay": 0.0005
+			}
+		},
+		"scheduler": {
+			"type": "CompScheduler",
+			"params": {
+			    "lr_decay": 0.5,
+		        "lr_stepLR_size": 10
+			}
+		},
+		"seed": 1,
+		"no_best_epoch_num": 50,
+		"val_metric": "loss",
+		"eval_mode_for_validation": false,
+		"sampler": "block_shuffle_by_length",
+		"lens_file": "configs/dev/cm/comparative/lengths.txt",
+		"labels": "dev.lab"
+	}
+}

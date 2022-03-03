@@ -1,0 +1,77 @@
+{
+    "system": "ADVCM",
+        "path": "trained_models/cm/AIR/train/model.pth",
+        "eer": 0.9917457103729248,
+        "logits": true,
+        "state_dict": null,
+    "arch": {
+        "type": "AIR",
+        "requires_device": false,
+        "args": {
+            "feat_dim": 256,
+	    "num_nodes": 3,
+	    "enc_dim": 256,
+	    "resnet_type": "18", 
+	    "nclasses": 2			
+        }
+    },
+    "loss": {
+        "type": "OCLoss",
+        "requires_device": false,
+        "args": {
+			"r_real": 0.9, 
+			"r_fake": 0.2, 
+			"alpha": 20
+		}
+    },
+        "extractor": {
+                "fn": "LFCC_Pad",
+                "args": {
+					"sr": 16000, 
+					"fl": 320, 
+					"fn": 512, 
+					"fs": 160, 					
+					"with_emphasis": true, 
+					"with_energy": false, 
+					"compress": true,
+					"skip": true,
+					"filter_num": 20, 
+					"num_ceps": 20, 
+					"max_len": 750
+                }
+        },
+    "flip_label": false,
+	"training_parameters": {
+		"num_epochs": 100,
+		"data_loader": {
+			"batch_size": 64,
+			"shuffle": true,
+			"num_workers": 0
+		},
+		"optimizer": {
+			"type": ["Adam", "SGD"],
+			"params": {
+			    "lr": 0.0003,
+		        "betas": [
+		                  0.9, 
+		                  0.999
+		    		     ],
+		        "eps": 1e-8,
+		        "weight_decay": 0.0005
+			}
+		},
+		"scheduler": {
+			"type": "AIRScheduler",
+			"params": {
+			    "lr_decay": 0.5,
+		        "interval": 10
+			}
+		},
+		"seed": 548,
+		"no_best_epoch_num": 100,
+		"val_metric": "eer",
+		"eval_mode_for_validation": true,
+		"sampler": null,
+		"labels": "train.lab"
+	}
+}
