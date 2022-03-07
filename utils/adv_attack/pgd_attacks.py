@@ -113,8 +113,18 @@ class Spectral_Attack(PGD):
     def _sgn(x):
         return np.sign(x.real) + 1j * np.sign(x.imag)
 
-    def _project(self, delta):
-        return delta
+    def _project(self, x, thresh0=500, thresh1=5000):
+        #return x
+        inv = self._inverse_transform(x)
+        y_fft = np.fft.rfft(inv)
+        mask = np.zeros((y_fft.shape), dtype=np.complex)
+        freq = np.fft.rfftfreq(inv.shape[-1], d=1./16000)
+        
+        idx0 = (np.abs(freq - thresh0)).argmin()
+        idx1 = (np.abs(freq - thresh1)).argmin()
+        mask[:, idx0:idx1] = 1
+
+        return self._transform(np.fft.irfft(y_fft * mask))
         
 class STFT_Attack(Spectral_Attack):
     def __init__(self, estimator, epsilon, max_iter, length = 48000, nfft = 512, window = "hann_window", hop_length=None, win_length=None, r_c=None):
@@ -156,12 +166,16 @@ class STFT_Attack(Spectral_Attack):
         if type(x) == np.ndarray:
             return ret.cpu().numpy()
         return ret
+    
     def _project(self, x):
         return x
-        inv = self._inverse_transform(x)
-        f = np.zeros((inv.shape), dtype=np.complex)
-        f[:, 500:5000] = 1
-        return self._transform(inv * f)
+        #return super()._project(x, 3000, 8000) #
+        return super()._project(x, 2000, 8000)+super()._project(x, 0, 600)
+
+    '''
+    def _project(self, x):
+        return x
+    '''
 
 class FFT_Attack(Spectral_Attack):
     def __init__(self, estimator, epsilon, max_iter, r_c):
@@ -176,8 +190,13 @@ class FFT_Attack(Spectral_Attack):
         if type(x) == np.ndarray:
             return np.fft.irfft(x)
         return torch.fft.irfft(x)
+    '''
     def _project(self, x):
         return x
-        f = np.zeros((x.shape), dtype=np.complex)
-        f[:, 500:5000] = 1
-        return x * f
+    '''
+
+    def _project(self, x):
+        return x
+        #return super()._project(x, 0, 8000) #
+        return super()._project(x, 2000, 8000)+super()._project(x, 0, 600)
+

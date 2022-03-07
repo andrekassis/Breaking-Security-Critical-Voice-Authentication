@@ -3,7 +3,7 @@ input_dir: "asvspoofWavs"
 lengths: inputs/lengths
 
 sr: 16000
-length: 12000 #48000
+length: 16000 #48000
 nr_nfft: 400
 optimization_itrs: 450 
 prop_decrease: 0.7
@@ -24,7 +24,7 @@ loss: null
 discriminator_wb: 
     args: 
         cm: #ignored for ADVSR
-            selector: [lcnnFull] #one of [SSNet, SENet, lcnnFull, lcnnHalf, rawGAT_st, mcg, mlcg, Res2Net, AIR, comparative, darts]
+            selector: [AASSIST] #[SENet] #lcnnFull] #one of [SSNet, SENet, lcnnFull, lcnnHalf, rawGAT_st, mcg, mlcg, Res2Net, AIR, comparative, darts]
             lambda: 3 #ignored for ADVSR, ADVCM
         asv: #ignored for ADVCM
             selector: [mfcc] #one of [mfcc, lps, xvec]
@@ -34,7 +34,7 @@ discriminator_wb:
 discriminators:
     args:
         cm: #ignored for ADVSR
-            selector: [SSNet, lcnnFull, rawGAT_st, mcg, mlcg, Res2Net, AIR, darts, comparative, RawDarts, AASSIST, AASSIST-L, AIR_AM] #[rawGAT_st, RawDarts, AASSIST, AASSIST-L] #[SSNet, lcnnFull, rawGAT_st, mcg, mlcg, Res2Net, AIR, darts, comparative, RawDarts, AASSIST, AASSIST-L, AIR_AM] 
+            selector: [SSNet, lcnnFull, rawGAT_st, mcg, mlcg, Res2Net, AIR, darts, comparative, RawDarts, AASSIST, AASSIST-L, AIR_AM] 
         asv: #ignored for ADVCM
             selector: [mfcc] #one of [mfcc, lps]
 
@@ -49,10 +49,10 @@ FFT_Attack:
 STFT_Attack:
     epsilon: 0.0005 #0.05
     max_iter: 30 #15
-    nfft: 400
-    window: 'kaiser_window' #kaiser_window hann_window hamming_window bartlett_window blackman_window
-    hop_length: 160 #160
-    win_length: 400 
+    nfft: 512 #400
+    window: 'kaiser_window' #'kaiser_window' #kaiser_window hann_window hamming_window bartlett_window blackman_window
+    hop_length: 256 ##160
+    win_length: 512 #400 #1024 
 
 auto_pgd:
     #norm: 2

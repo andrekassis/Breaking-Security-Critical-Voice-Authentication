@@ -27,6 +27,7 @@ from utils.adv_attack.pgd_attacks import TIME_DOMAIN_ATTACK, FFT_Attack, STFT_At
 from utils.audio.feats import Pad
 from utils.generic.sortedDict import SortedDict
 from utils.generic.score import Score
+from utils.adv_attack.reduce import sp
 
 trim_leading_silence: AudioSegment = lambda x, silence_threshold: x[detect_leading_silence(x, silence_threshold = silence_threshold) :]
 trim_trailing_silence: AudioSegment = lambda x, silence_threshold: trim_leading_silence(x.reverse(), silence_threshold).reverse()
@@ -87,12 +88,12 @@ class AttackerWrapper:
             init = sf.read(input_path)[0]
             return init
 
-    def generate(self, x, y):
+    def generate(self, x, y, **r_args):
         if len(x.shape) == 1:
             x = np.expand_dims(x, 0)
         self.attack.estimator.set_input_shape((x.shape[1], ))
         if self.attack_type == "FFT_Attack" or self.attack_type == "TIME_DOMAIN_ATTACK" or self.attack_type == "STFT_Attack":
-            return x, self.attack.generate(x, y)
+            return x, self.attack.generate(x, y, **r_args)
         if self.attack_type == "carlini" or self.attack_type == "auto_pgd":
             return x, self.attack.generate(x, 1 - y)
 
@@ -100,7 +101,7 @@ class AttackerWrapper:
         init = np.expand_dims(init, 0)
         return x, self.attack.generate(x, x_adv_init = init)
 
-def get_attacker(config, attack_type, system, device):
+def get_attacker(config, attack_type, system, device, r_c=None):
     loader, conf_ret = parse_config(config["discriminator_wb"], config["shadow"], system)
 
     est = ESTIMATOR_NON_ADAPTIVE(device = device, loader = loader, config = conf_ret[0], loss = config['loss'])
@@ -111,7 +112,7 @@ def get_attacker(config, attack_type, system, device):
             est.attack.cm.model.train()
 
     if attack_type == "TIME_DOMAIN_ATTACK":
-        Attacker = TIME_DOMAIN_ATTACK(est, **config["TIME_DOMAIN_ATTACK"])
+        Attacker = TIME_DOMAIN_ATTACK(est, **config["TIME_DOMAIN_ATTACK"], r_c = r_c)
     elif attack_type == "carlini":
         Attacker = CarliniL2Method(est, **config["carlini"])
     elif attack_type == "boundary":
@@ -119,9 +120,9 @@ def get_attacker(config, attack_type, system, device):
     elif attack_type == "bb":
         Attacker = BrendelBethgeAttack(est, **config["bb"])
     elif attack_type == "FFT_Attack":
-        Attacker = FFT_Attack(est, **config["FFT_Attack"])
+        Attacker = FFT_Attack(est, **config["FFT_Attack"], r_c = r_c)
     elif attack_type == "STFT_Attack":
-            Attacker = STFT_Attack(est, **config["STFT_Attack"])
+            Attacker = STFT_Attack(est, **config["STFT_Attack"], r_c = r_c)
     elif attack_type == "auto_pgd":
         est.set_input_shape((16000*6,))
         Attacker = AutoProjectedGradientDescent(est, **config["auto_pgd"])
@@ -132,49 +133,53 @@ def load_input(path_label, wav_dir):
     #return trim(os.path.join(wav_dir, path_label + '.wav')), np.array([[1, 0]])
     return sf.read(os.path.join(wav_dir, path_label + '.wav'))[0], np.array([[1, 0]])
 
-def generate(adv, y, TFD, FD, TD, conf, evalu=None, verbose = False): 
+def configure_attack(A, start, m, power, delta, alpha_factor, max_iter):
+    A.attack.epsilon =  np.power(start / m, power)
+    A.attack.alpha = A.attack.epsilon / alpha_factor
+    A.attack.delta = delta
+    A.attack.max_iter = max_iter
+    return A
+
+def generate(adv, y, TFD, FD, TD, itrs, sg, evalu=None, verbose = False):
     TFD.attack.length = adv.shape[1]
-    TFD.attack.epsilon = 0.005  
-    TFD.attack.alpha = TFD.attack.epsilon / 10
-    TFD.attack.delta = None
-    TFD.attack.max_iter = 30
-    adv = TFD.generate(adv, y)[1]
-
-    for k in tqdm(range(conf['itrs'])):
-        FD.attack.epsilon = np.power(conf['FD'] / (k+1), 0.75)
-        FD.attack.delta=0
-        FD.attack.alpha = FD.attack.epsilon #/ 10
-        FD.attack.max_iter = 1#0
-        p= conf['prop_decrease'] / (k+conf['k_div']-0.4)
-        r = (1 / (1-p) -1) / 2.5 + 1 #conf['r_div'] + 1
-        
-        TFD.attack.epsilon = 0.006 / (k+1) #np.power((k+1), 0.75) #0.008 / (k+1)
-        TFD.attack.alpha = TFD.attack.epsilon #/10
-        TFD.attack.delta = 0
-        TFD.attack.max_iter = 1#0
-
-        adv = TFD.generate(adv, y)[1]
-        adv = FD.generate(adv, y)[1]
-
-        
-        if k > 0:
-            adv = nr.reduce_noise(y = adv[0], sr=conf['sr'], stationary=False, n_fft = 512, prop_decrease=p) 
-            adv = np.expand_dims(adv * r, 0).clip(-1, 1)         
-        
-        adv = TFD.generate(adv, y)[1] 
-        adv = FD.generate(adv, y)[1]
-
-        if verbose:
-            print([ evalu[j].result(adv, 1 - np.argmax(y, axis=1), eval=True)[0] for j in range(len(evalu))])
-
-    if conf['opt']:
-        TD.attack.epsilon = 0.002
-        adv = TD.generate(adv, y)[1]
+    TD = configure_attack(TD, start=0.005, m=1, power=1, delta=0, alpha_factor=10, max_iter=30)
+    adv = TD.generate(adv, y, **{'p': 1, 'n_std_thresh_stationary': 1.5})[1]
     
-        if verbose:
-            print([ evalu[j].result(adv, 1 - np.argmax(y, axis=1), eval=True)[0] for j in range(len(evalu))])
+    if verbose:
+        print([ evalu[j].result(adv, 1 - np.argmax(y, axis=1), eval=True)[0] for j in range(len(evalu))])
+
+    for k in tqdm(range(itrs)):   
+        m =  np.min([k+1, 15])
+        p= 1 / (k+1.1)
+        r= (1/(1-p) - 1)/ 3 + 1
+        n_std_thresh_stationary = 1.5
+        r_args = {'p': 1, 'n_std_thresh_stationary': n_std_thresh_stationary}
+
+        FD = configure_attack(FD, start=0.2, m=m, power=1.2, delta=0, alpha_factor=1, max_iter=1)
+        TFD = configure_attack(TFD, start=0.0002, m=m, power=0.9, delta=0, alpha_factor=1, max_iter=1)
+
+        adv = TFD.generate(adv, y, **r_args)[1]
+        adv = FD.generate(adv, y, **r_args)[1]
+         
+        if k < 5: #True: #k < 10:#5:
+            adv = sg(adv, p, n_std_thresh_stationary= 1.5)      
+            adv = np.clip(adv*r, -1, 1)
         
-    return adv
+        adv = FD.generate(adv, y, **r_args)[1] 
+        adv = TFD.generate(adv, y, **r_args)[1]
+
+        if verbose:
+            print([ evalu[j].result(adv / np.max(np.abs(adv)), 1 - np.argmax(y, axis=1), eval=True)[0] for j in range(len(evalu))])
+
+    TD = configure_attack(TD, start=0.0002, m=1, power=1, delta=0, alpha_factor=10, max_iter=30)
+    #adv = TD.generate(adv, y, **{'p': 1, 'n_std_thresh_stationary': 2.5})[1]
+    adv = TD.generate(adv, y, **{'p': None})[1]
+
+    
+    if verbose:
+        print([ evalu[j].result(adv / np.max(np.abs(adv)), 1 - np.argmax(y, axis=1), eval=True)[0] for j in range(len(evalu))])
+        
+    return adv / np.max(np.abs(adv))
     
 def log_stats(orig, adv, y, eval_asv, eval_cm, bb_asv, bb_cm, tester, id, input, idx, SD, log_interval):
     orig_res = tester.attack.estimator.result(orig, 1 - np.argmax(y, axis=1))
@@ -198,13 +203,12 @@ def log_stats(orig, adv, y, eval_asv, eval_cm, bb_asv, bb_cm, tester, id, input,
     
 def init(config, device):
     config["STFT_Attack"]["length"] = config["length"]
+    reduce_conf = {'stationary': True, 'win': 'kaiser_window', 'n_fft': 1024, 'hop_length': 256, 'win_length': 1024, 'device': device, 'freq_mask_smooth_hz': 500, 'time_mask_smooth_ms': 50, 'padding':0}
 
-    TD = get_attacker(config, attack_type = "TIME_DOMAIN_ATTACK", system = "ADVSR", device = device) 
-    FD = get_attacker(config, attack_type = "FFT_Attack", system = "ADVSR", device = device) 
-    TFD = get_attacker(config, attack_type = "STFT_Attack", system = "ADVSR", device = device)
-    #TFD = get_attacker(config, attack_type = "STFT_Attack", system = "ADVCM", device = device) 
-
-    tester = get_attacker(config, attack_type = "TIME_DOMAIN_ATTACK", system = "ADVJOINT", device = device)
+    TD = get_attacker(config, attack_type = "TIME_DOMAIN_ATTACK", system = "ADVSR", r_c = reduce_conf, device = device) 
+    FD = get_attacker(config, attack_type = "FFT_Attack", system = "ADVSR", r_c = reduce_conf, device = device) 
+    TFD = get_attacker(config, attack_type = "STFT_Attack", system = "ADVSR", r_c = reduce_conf, device = device)
+    tester = get_attacker(config, attack_type = "TIME_DOMAIN_ATTACK", system = "ADVJOINT", r_c = reduce_conf, device = device)
     
     labels_file = os.path.join(config["input_dir"], 'labels/eval.lab')
     wav_dir = os.path.join(config["input_dir"], 'wavs')
@@ -217,7 +221,7 @@ def init(config, device):
     out_dir = os.path.join('expirements', id)
     os.makedirs(out_dir)
     shutil.copy(arguments.conf, os.path.join(out_dir, arguments.conf))
-    shutil.copy('attack.py', os.path.join(out_dir, 'attack.py'))
+    shutil.copy(os.path.abspath(__file__), os.path.join(out_dir, 'attack.py'))
     shutil.copy('utils/adv_attack/pgd_attacks.py', os.path.join(out_dir, 'pgd_attacks.py'))
     out_file = os.path.join(out_dir, 'results.txt')
 
@@ -234,7 +238,7 @@ def init(config, device):
     
     loader, conf_ret = parse_config(config["discriminators"], config["target"], system = "ADVSR")
     eval_asv = [ ESTIMATOR_NON_ADAPTIVE(device = device, loader = loader, config = cf) for cf in conf_ret ]
-    return FD, TFD, TD, tester, eval_asv, eval_cm, inputs, out_file, wav_dir, out_wav, id, SD
+    return FD, TFD, TD, tester, eval_asv, eval_cm, inputs, out_file, wav_dir, out_wav, id, SD, reduce_conf
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -243,25 +247,19 @@ if __name__ == "__main__":
     
     arguments = parser.parse_args()
     device = arguments.device
-
-    a_1 = {'sr': 16000, 'nfft': 200, 'itrs': 10, 'prop_decrease': 1, 'FD': 0.1, 'stationary': True, 'opt': False, 'r_div': 3, 'k_div': 1.5}
-    a_2 = {'sr': 16000, 'nfft': 200, 'itrs': 10, 'prop_decrease': 1, 'FD': 0.2, 'stationary': False, 'opt': True, 'r_div' : 3, 'k_div': 1.5}
-    a_2 = {'sr': 16000, 'nfft': 200, 'itrs': 10, 'prop_decrease': 1, 'FD': 0.6, 'stationary': False, 'opt': True, 'r_div' : 3, 'k_div': 1.5}
-    a_3 = {'sr': 16000, 'nfft': 200, 'itrs': 10, 'prop_decrease': 0.8, 'FD': 0.6, 'stationary': False, 'opt': True, 'r_div' : 1, 'k_div': 1.5}
-    a_4 = {'sr': 16000, 'nfft': 200, 'itrs': 10, 'prop_decrease': 1, 'FD': 0.05, 'stationary': True, 'opt': False, 'r_div': 3, 'k_div': 1.5}
-    a_5 = {'sr': 16000, 'nfft': 200, 'itrs': 10, 'prop_decrease': 1, 'FD': 0.6, 'stationary': True, 'opt': True, 'r_div' : 1, 'k_div': 1.5}
+    
     with open(arguments.conf) as f:
         config = yaml.load(f, Loader=yaml.Loader)    
      
-    FD, TFD, TD, tester, eval_asv, eval_cm, inputs, out_file, wav_dir, out_wav, id, SD = init(config, device)    
-    
+    FD, TFD, TD, tester, eval_asv, eval_cm, inputs, out_file, wav_dir, out_wav, id, SD, r_c = init(config, device)    
+    r_c['stationary'] = False
+    sg = sp(**r_c) 
     bb_cm = np.array([0] * len(eval_cm))
     bb_asv = np.array([0] * len(eval_asv))
     padder = Pad(config["length"])
     with open(out_file, 'w', buffering=1) as f:
         for i, input in enumerate(tqdm(inputs)):
             x, y = load_input(input[0], wav_dir)
-
             ref = random.sample(input[1:-1], config['num_samples'])
             #ref = [ sf.read(os.path.join(wav_dir, r + '.wav'))[0] for r in ref]
             ref = [ trim(os.path.join(wav_dir, r + '.wav')) for r in ref]
@@ -278,13 +276,7 @@ if __name__ == "__main__":
             orig = np.expand_dims(x, 0)            
             adv = np.copy(orig)
 
-            
-            #adv = generate(adv, y, TFD, FD, TD, a_1, evalu = eval_cm)
-            adv = generate(adv, y, TFD, FD, TD, a_2, evalu = eval_cm, verbose = True)     
-            #adv = generate(adv, y, TFD, FD, TD, a_2, evalu = eval_cm, verbose = True)
-            #adv = generate(adv, y, TFD, FD, TD, a_3, evalu = eval_cm, verbose = True)
-            #adv = generate(adv, y, TFD, FD, TD, a_5, evalu = eval_cm)
-
+            adv = generate(adv, y, TFD, FD, TD, 50, sg, evalu = eval_cm, verbose = True)
 
             bb_asv, bb_cm, to_write = log_stats(orig, adv, y, eval_asv, eval_cm, bb_asv, bb_cm, tester, id, input, i, SD, config['log_interval'])
             sf.write(out_wav + "/" + input[0] + "-adv.wav", adv[0], config["sr"])

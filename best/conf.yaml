@@ -3,7 +3,7 @@ input_dir: "asvspoofWavs"
 lengths: inputs/lengths
 
 sr: 16000
-length: 12000 #48000
+length: 16000 #48000
 nr_nfft: 400
 optimization_itrs: 450 
 prop_decrease: 0.7
@@ -52,7 +52,7 @@ STFT_Attack:
     nfft: 400
     window: 'kaiser_window' #'kaiser_window' #kaiser_window hann_window hamming_window bartlett_window blackman_window
     hop_length: 160 #160
-    win_length: 400 #1024 
+    win_length: 400 #400 #1024 
 
 auto_pgd:
     #norm: 2
