@@ -10,7 +10,7 @@ from art.estimators.classification.classifier import ClassifierMixin
 import components
 from utils.eval import model_loaders
         
-class ESTIMATOR_NON_ADAPTIVE(BaseEstimator, ClassGradientsMixin, ClassifierMixin, LossGradientsMixin, ABC):
+class ESTIMATOR(BaseEstimator, ClassGradientsMixin, ClassifierMixin, LossGradientsMixin, ABC):
     nb_classes = 2
     input_shape = ()
     def __init__(self, device, loader, config, loss = None):

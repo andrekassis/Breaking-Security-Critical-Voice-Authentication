@@ -3,12 +3,18 @@ input_dir: "asvspoofWavs"
 lengths: inputs/lengths
 
 sr: 16000
-length: 16000 #48000
-nr_nfft: 400
-optimization_itrs: 450 
-prop_decrease: 0.7
-log_interval: 1
+length: 16000
+system: ADVSR
+attack_type: CM_Attack
 num_samples: 10
+
+log_interval: 1
+perf_log: perf.txt
+verbose: True
+print_iter_out: True
+write_wavs: True
+write_plots: True
+
 shadow:
     cm: "dev"
     asv: "dev"
@@ -36,7 +42,7 @@ discriminators:
         cm: #ignored for ADVSR
             selector: [SSNet, lcnnFull, rawGAT_st, mcg, mlcg, Res2Net, AIR, darts, comparative, RawDarts, AASSIST, AASSIST-L, AIR_AM] 
         asv: #ignored for ADVCM
-            selector: [mfcc] #one of [mfcc, lps]
+            selector: [mfcc] #one of [mfcc, lps, xvec]
 
 TIME_DOMAIN_ATTACK:
     epsilon: 0.001 #0.001 
@@ -92,3 +98,62 @@ bb:
     binary_search_steps: 10 #maybe change this. works for 1
     lr: 1.e-6
 
+CM_Attack:
+    first_layer:
+        type: "TIME_DOMAIN_ATTACK"
+        args:  
+            epsilon: 0.005
+            max_iter: 30
+            delta: 0
+    
+    last_layer:
+        type: "TIME_DOMAIN_ATTACK"
+        args:  
+            epsilon: 0.0002
+            max_iter: 30
+            delta: 0
+        
+    mid_layers: [
+                 {'type': 'STFT_Attack',
+                  'args': { 
+                           epsilon: 0.0002,
+                           delta: 0,
+                           nfft: 512,
+                           window: 'kaiser_window', 
+                           hop_length: 256, 
+                           win_length: 512, 
+                           max_iter: 1
+                          }
+                 },
+                 {'type': 'FFT_Attack',
+                  'args': { 
+                           epsilon: 0.2,
+                           delta: 0,
+                           max_iter: 1
+                          }
+                 }
+                ]
+    itrs: 50
+    alpha_factors:
+        STFT_Attack: 1
+        FFT_Attack: 1
+    powers:
+        STFT_Attack: 0.9
+        FFT_Attack: 1.2
+    r_c:
+        stationary: true
+        win: 'hamming_window'
+        n_fft: 1024
+        hop_length: 256
+        win_length: 1024
+        freq_mask_smooth_hz: 500
+        time_mask_smooth_ms: 50
+        padding: 0
+    stop_reduce: 10
+    r_div: 3
+    optim_sat: 15
+    stationary: false
+    
+r_args:
+    p: 1
+    n_std_thresh_stationary: 1.5

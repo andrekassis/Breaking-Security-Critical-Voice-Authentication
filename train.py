@@ -11,6 +11,7 @@ from pathlib import Path
 from collections import OrderedDict, defaultdict
 
 from utils.train import schedulers
+from util.generic.setup import setup_seed
 from utils.audio.data import ASVDataset, SamplerBlockShuffleByLen, customize_collate
 from utils.eval.eer_tools import cal_roc_eer
 from utils.eval.model_loaders import load_cm_asvspoof
@@ -44,20 +45,6 @@ class OptimizerWrapper():
     def increase_delta(self):
         for s in self.lr_scheduler:
             s.increase_delta()
-
-def setup_seed(random_seed, cudnn_deterministic=True):
-    if random_seed == None:
-        return
-        
-    torch.manual_seed(random_seed)
-    random.seed(random_seed)
-    np.random.seed(random_seed)
-    os.environ['PYTHONHASHSEED'] = str(random_seed)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(random_seed)
-        torch.backends.cudnn.deterministic = cudnn_deterministic
-        torch.backends.cudnn.benchmark = False
      
 def process_batch(test_batch, model, loss, **kwargs):
     test_sample, test_label = test_batch
@@ -92,7 +79,6 @@ def train(model, loss, optimizer, train_loader, val_loader, num_epochs, lr, out_
         
         for test_batch in tqdm(train_loader):
             Loss, out = process_batch(test_batch, model, loss, **train_args)
-            #print(str(out) + ", label:" + str(test_batch[1]) + ', loss: ' + str(Loss))
             optimizer.zero_grad()
             Loss.backward()
             optimizer.step()
@@ -126,11 +112,6 @@ def train(model, loss, optimizer, train_loader, val_loader, num_epochs, lr, out_
             best_res = res
             best_epoch = epoch_num
             best_epoch_tmp = epoch_num            
-
-        Message = "\nEpoch: " + str(epoch_num) + " - Val metric: " + val_metric + ", value: " + str(res) + ', best: ' + str(best_res)
-        with open(os.path.join(out_f, "log.log"), "a") as log:
-            log.write(Message + "\n")
-        print(Message)
             
         is_best = res < best_res if val_metric == "eer" or val_metric == "loss" else res > best_res
         if is_best:
@@ -138,6 +119,13 @@ def train(model, loss, optimizer, train_loader, val_loader, num_epochs, lr, out_
             best_epoch = epoch_num
             best_epoch_tmp = epoch_num
             best_res = res
+
+        Message = "\nEpoch: " + str(epoch_num) + " - Val metric: " + val_metric + ", value: " + str(res) + ', best: ' + str(best_res)
+        with open(os.path.join(out_f, "log.log"), "a") as log:
+            log.write(Message + "\n")
+        print(Message)
+
+        model.save_state(os.path.join(out_f, 'model' + str(epoch_num) + '.pth'))
         
         if epoch_num - best_epoch_tmp > 2:
             optimizer.increase_delta()

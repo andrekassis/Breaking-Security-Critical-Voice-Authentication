@@ -6,13 +6,16 @@ from abc import ABC
 from .reduce import sp
 
 class PGD(ABC):
-    def __init__(self, estimator, epsilon, max_iter, type, r_c):
+    def __init__(self, estimator, epsilon, max_iter, type, delta = None, r_c=None):
         self.estimator = estimator
         self.epsilon = epsilon
         self.max_iter = max_iter
         self.type = type
-        self.delta = None
-        self.sg = sp(**r_c)
+        self.delta = delta
+        if r_c != None:
+            self.sg = sp(**r_c)
+        else:
+            self.sg = None
 
     def _transform(self, x):
         pass
@@ -34,7 +37,8 @@ class PGD(ABC):
         var = torch.tensor(x, requires_grad = True, device = self.estimator.device)
         x_t = self._inverse_transform(var)        
         
-        x_t = self.sg(x_t, **r_args)
+        if self.sg:
+            x_t = self.sg(x_t, **r_args)
         
         grad = self.estimator.loss_gradient(x_t.detach().cpu().numpy(), y)
         grad = torch.tensor(grad, device = self.estimator.device)
@@ -47,6 +51,7 @@ class PGD(ABC):
         return grad
 
     def _itr(self, X, y, **r_args):
+        self.length = X.shape[-1]
         X_F = self._transform(X)
         self.eps = np.ones(X_F.shape) * self.epsilon
         try:
@@ -80,8 +85,8 @@ class PGD(ABC):
         return ret
         
 class TIME_DOMAIN_ATTACK(PGD):
-    def __init__(self, estimator, epsilon, max_iter, r_c):
-        super().__init__(estimator, epsilon, max_iter, np.float64, r_c)
+    def __init__(self, estimator, epsilon, max_iter, delta = None, r_c = None):
+        super().__init__(estimator, epsilon, max_iter, np.float64, delta, r_c)
         
     def _transform(self, x):
         return x
@@ -100,8 +105,8 @@ class TIME_DOMAIN_ATTACK(PGD):
         return np.sign(x)
         
 class Spectral_Attack(PGD):
-    def __init__(self, estimator, epsilon, max_iter, r_c):
-        super().__init__(estimator, epsilon, max_iter, np.complex128, r_c)
+    def __init__(self, estimator, epsilon, max_iter, delta = None, r_c = None):
+        super().__init__(estimator, epsilon, max_iter, np.complex128, delta, r_c)
 
     def _clip(self, x):
         sgn = np.sign(x.real) + 1j * np.sign(x.imag)
@@ -114,7 +119,6 @@ class Spectral_Attack(PGD):
         return np.sign(x.real) + 1j * np.sign(x.imag)
 
     def _project(self, x, thresh0=500, thresh1=5000):
-        #return x
         inv = self._inverse_transform(x)
         y_fft = np.fft.rfft(inv)
         mask = np.zeros((y_fft.shape), dtype=np.complex)
@@ -127,18 +131,15 @@ class Spectral_Attack(PGD):
         return self._transform(np.fft.irfft(y_fft * mask))
         
 class STFT_Attack(Spectral_Attack):
-    def __init__(self, estimator, epsilon, max_iter, length = 48000, nfft = 512, window = "hann_window", hop_length=None, win_length=None, r_c=None):
-        super().__init__(estimator, epsilon, max_iter, r_c)
-        self.length = length
+    def __init__(self, estimator, epsilon, max_iter, delta = None, nfft = 512, window = "hann_window", hop_length=None, win_length=None, r_c=None):
+        super().__init__(estimator, epsilon, max_iter, delta, r_c)
         self.nfft = nfft
         self.win_length = win_length
         if self.win_length == None:
             self.win_length = self.nfft
         self.hop_length = hop_length
         win_args = {'window_length': self.win_length, 'device': self.estimator.device, 'requires_grad': False}
-        #if window == "kaiser_window":
-        #    win_args['beta'] = 8.0 
-        #    win_args['periodic'] = True
+        
         if window == None:
             self.win = None
         else:
@@ -172,14 +173,9 @@ class STFT_Attack(Spectral_Attack):
         #return super()._project(x, 3000, 8000) #
         return super()._project(x, 2000, 8000)+super()._project(x, 0, 600)
 
-    '''
-    def _project(self, x):
-        return x
-    '''
-
 class FFT_Attack(Spectral_Attack):
-    def __init__(self, estimator, epsilon, max_iter, r_c):
-        super().__init__(estimator, epsilon, max_iter, r_c)
+    def __init__(self, estimator, epsilon, max_iter, delta = None, r_c = None):
+        super().__init__(estimator, epsilon, max_iter, delta, r_c)
  
     def _transform(self, x):
         if type(x) == np.ndarray:
@@ -190,10 +186,6 @@ class FFT_Attack(Spectral_Attack):
         if type(x) == np.ndarray:
             return np.fft.irfft(x)
         return torch.fft.irfft(x)
-    '''
-    def _project(self, x):
-        return x
-    '''
 
     def _project(self, x):
         return x
