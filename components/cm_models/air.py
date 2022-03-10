@@ -8,6 +8,7 @@ import numpy as np
 
 ## Adapted from https://github.com/joaomonteirof/e2e_antispoofing
 
+
 class OCSoftmax(nn.Module):
     def __init__(self, feat_dim=2):
         super(OCSoftmax, self).__init__()
@@ -18,16 +19,19 @@ class OCSoftmax(nn.Module):
     def forward(self, x):
         w = F.normalize(self.center, p=2, dim=1)
         x = F.normalize(x, p=2, dim=1)
-        scores = x @ w.transpose(0,1)
+        scores = x @ w.transpose(0, 1)
         return scores.squeeze(1)
-        
+
+
 class SelfAttention(nn.Module):
     def __init__(self, hidden_size, mean_only=False):
         super(SelfAttention, self).__init__()
 
-        #self.output_size = output_size
+        # self.output_size = output_size
         self.hidden_size = hidden_size
-        self.att_weights = nn.Parameter(torch.Tensor(1, hidden_size),requires_grad=True)
+        self.att_weights = nn.Parameter(
+            torch.Tensor(1, hidden_size), requires_grad=True
+        )
 
         self.mean_only = mean_only
 
@@ -36,46 +40,61 @@ class SelfAttention(nn.Module):
     def forward(self, inputs):
 
         batch_size = inputs.size(0)
-        weights = torch.bmm(inputs, self.att_weights.permute(1, 0).unsqueeze(0).repeat(batch_size, 1, 1))
+        weights = torch.bmm(
+            inputs, self.att_weights.permute(1, 0).unsqueeze(0).repeat(batch_size, 1, 1)
+        )
 
-        if inputs.size(0)==1:
-            attentions = F.softmax(torch.tanh(weights),dim=1)
+        if inputs.size(0) == 1:
+            attentions = F.softmax(torch.tanh(weights), dim=1)
             weighted = torch.mul(inputs, attentions.expand_as(inputs))
         else:
-            attentions = F.softmax(torch.tanh(weights.squeeze()),dim=1)
+            attentions = F.softmax(torch.tanh(weights.squeeze()), dim=1)
             weighted = torch.mul(inputs, attentions.unsqueeze(2).expand_as(inputs))
 
         if self.mean_only:
             return weighted.sum(1)
         else:
-            noise = 1e-5*torch.randn(weighted.size())
+            noise = 1e-5 * torch.randn(weighted.size())
 
             if inputs.is_cuda:
                 noise = noise.to(inputs.device)
-            avg_repr, std_repr = weighted.sum(1), (weighted+noise).std(1)
+            avg_repr, std_repr = weighted.sum(1), (weighted + noise).std(1)
 
-            representations = torch.cat((avg_repr,std_repr),1)
+            representations = torch.cat((avg_repr, std_repr), 1)
 
             return representations
 
 
 class PreActBlock(nn.Module):
-    '''Pre-activation version of the BasicBlock.'''
+    """Pre-activation version of the BasicBlock."""
+
     expansion = 1
 
     def __init__(self, in_planes, planes, stride, *args, **kwargs):
         super(PreActBlock, self).__init__()
         self.bn1 = nn.BatchNorm2d(in_planes)
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False
+        )
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            planes, planes, kernel_size=3, stride=1, padding=1, bias=False
+        )
 
-        if stride != 1 or in_planes != self.expansion*planes:
-            self.shortcut = nn.Sequential(nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False))
+        if stride != 1 or in_planes != self.expansion * planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(
+                    in_planes,
+                    self.expansion * planes,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                )
+            )
 
     def forward(self, x):
         out = F.relu(self.bn1(x))
-        shortcut = self.shortcut(out) if hasattr(self, 'shortcut') else x
+        shortcut = self.shortcut(out) if hasattr(self, "shortcut") else x
         out = self.conv1(out)
         out = self.conv2(F.relu(self.bn2(out)))
         out += shortcut
@@ -83,7 +102,8 @@ class PreActBlock(nn.Module):
 
 
 class PreActBottleneck(nn.Module):
-    '''Pre-activation version of the original Bottleneck module.'''
+    """Pre-activation version of the original Bottleneck module."""
+
     expansion = 4
 
     def __init__(self, in_planes, planes, stride, *args, **kwargs):
@@ -91,49 +111,69 @@ class PreActBottleneck(nn.Module):
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            planes, planes, kernel_size=3, stride=stride, padding=1, bias=False
+        )
         self.bn3 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, self.expansion*planes, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(
+            planes, self.expansion * planes, kernel_size=1, bias=False
+        )
 
-        if stride != 1 or in_planes != self.expansion*planes:
-            self.shortcut = nn.Sequential(nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False))
+        if stride != 1 or in_planes != self.expansion * planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(
+                    in_planes,
+                    self.expansion * planes,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                )
+            )
 
     def forward(self, x):
         out = F.relu(self.bn1(x))
-        shortcut = self.shortcut(out) if hasattr(self, 'shortcut') else x
+        shortcut = self.shortcut(out) if hasattr(self, "shortcut") else x
         out = self.conv1(out)
         out = self.conv2(F.relu(self.bn2(out)))
         out = self.conv3(F.relu(self.bn3(out)))
         out += shortcut
         return out
 
+
 def conv3x3(in_planes, out_planes, stride=1):
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+    return nn.Conv2d(
+        in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False
+    )
+
 
 def conv1x1(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
-RESNET_CONFIGS = {'18': [[2, 2, 2, 2], PreActBlock],
-                  '28': [[3, 4, 6, 3], PreActBlock],
-                  '34': [[3, 4, 6, 3], PreActBlock],
-                  '50': [[3, 4, 6, 3], PreActBottleneck],
-                  '101': [[3, 4, 23, 3], PreActBottleneck]
-                  }
+
+RESNET_CONFIGS = {
+    "18": [[2, 2, 2, 2], PreActBlock],
+    "28": [[3, 4, 6, 3], PreActBlock],
+    "34": [[3, 4, 6, 3], PreActBlock],
+    "50": [[3, 4, 6, 3], PreActBottleneck],
+    "101": [[3, 4, 23, 3], PreActBottleneck],
+}
+
 
 def setup_seed(random_seed, cudnn_deterministic=True):
     # initialization
     torch.manual_seed(random_seed)
     random.seed(random_seed)
     np.random.seed(random_seed)
-    os.environ['PYTHONHASHSEED'] = str(random_seed)
+    os.environ["PYTHONHASHSEED"] = str(random_seed)
 
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(random_seed)
         torch.backends.cudnn.deterministic = cudnn_deterministic
         torch.backends.cudnn.benchmark = False
 
+
 class ResNet(nn.Module):
-    def __init__(self, num_nodes, enc_dim, resnet_type='18', nclasses=2):
+    def __init__(self, num_nodes, enc_dim, resnet_type="18", nclasses=2):
         self.in_planes = 16
         super(ResNet, self).__init__()
 
@@ -141,7 +181,9 @@ class ResNet(nn.Module):
 
         self._norm_layer = nn.BatchNorm2d
 
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=(9, 3), stride=(3, 1), padding=(1, 1), bias=False)
+        self.conv1 = nn.Conv2d(
+            1, 16, kernel_size=(9, 3), stride=(3, 1), padding=(1, 1), bias=False
+        )
         self.bn1 = nn.BatchNorm2d(16)
         self.activation = nn.ReLU()
 
@@ -150,11 +192,19 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        self.conv5 = nn.Conv2d(512 * block.expansion, 256, kernel_size=(num_nodes, 3), stride=(1, 1), padding=(0, 1),
-                               bias=False)
+        self.conv5 = nn.Conv2d(
+            512 * block.expansion,
+            256,
+            kernel_size=(num_nodes, 3),
+            stride=(1, 1),
+            padding=(0, 1),
+            bias=False,
+        )
         self.bn5 = nn.BatchNorm2d(256)
         self.fc = nn.Linear(256 * 2, enc_dim)
-        self.fc_mu = nn.Linear(enc_dim, nclasses) if nclasses >= 2 else nn.Linear(enc_dim, 1)
+        self.fc_mu = (
+            nn.Linear(enc_dim, nclasses) if nclasses >= 2 else nn.Linear(enc_dim, 1)
+        )
 
         self.initialize_params()
         self.attention = SelfAttention(256)
@@ -162,10 +212,12 @@ class ResNet(nn.Module):
     def initialize_params(self):
         for layer in self.modules():
             if isinstance(layer, torch.nn.Conv2d):
-                init.kaiming_normal_(layer.weight, a=0, mode='fan_out')
+                init.kaiming_normal_(layer.weight, a=0, mode="fan_out")
             elif isinstance(layer, torch.nn.Linear):
                 init.kaiming_uniform_(layer.weight)
-            elif isinstance(layer, torch.nn.BatchNorm2d) or isinstance(layer, torch.nn.BatchNorm1d):
+            elif isinstance(layer, torch.nn.BatchNorm2d) or isinstance(
+                layer, torch.nn.BatchNorm1d
+            ):
                 layer.weight.data.fill_(1)
                 layer.bias.data.zero_()
 
@@ -173,14 +225,27 @@ class ResNet(nn.Module):
         norm_layer = self._norm_layer
         downsample = None
         if stride != 1 or self.in_planes != planes * block.expansion:
-            downsample = nn.Sequential(conv1x1(self.in_planes, planes * block.expansion, stride),
-                                       norm_layer(planes * block.expansion))
+            downsample = nn.Sequential(
+                conv1x1(self.in_planes, planes * block.expansion, stride),
+                norm_layer(planes * block.expansion),
+            )
         layers = []
-        layers.append(block(self.in_planes, planes, stride, downsample, 1, 64, 1, norm_layer))
+        layers.append(
+            block(self.in_planes, planes, stride, downsample, 1, 64, 1, norm_layer)
+        )
         self.in_planes = planes * block.expansion
         for _ in range(1, num_blocks):
             layers.append(
-                block(self.in_planes, planes, 1, groups=1, base_width=64, dilation=False, norm_layer=norm_layer))
+                block(
+                    self.in_planes,
+                    planes,
+                    1,
+                    groups=1,
+                    base_width=64,
+                    dilation=False,
+                    norm_layer=norm_layer,
+                )
+            )
 
         return nn.Sequential(*layers)
 
@@ -203,27 +268,32 @@ class ResNet(nn.Module):
         mu = self.fc_mu(feat)
 
         return feat, mu
-        
+
+
 class AIR(nn.Module):
-    def __init__(self, feat_dim = 256, num_nodes = 3, enc_dim = 256, resnet_type='18', nclasses=2):
+    def __init__(
+        self, feat_dim=256, num_nodes=3, enc_dim=256, resnet_type="18", nclasses=2
+    ):
         super(AIR, self).__init__()
         self.score_fn = OCSoftmax(feat_dim)
-        self.model = ResNet(num_nodes, enc_dim = enc_dim, resnet_type=resnet_type, nclasses=nclasses)
-        
-    def forward(self, x, eval = False):
+        self.model = ResNet(
+            num_nodes, enc_dim=enc_dim, resnet_type=resnet_type, nclasses=nclasses
+        )
+
+    def forward(self, x, eval=False):
         x, _ = self.model(x)
-        out = self.score_fn(x) 
+        out = self.score_fn(x)
         if eval == False:
             return out
 
         neg = -out
-        return torch.cat((neg.unsqueeze(-2), out.unsqueeze(-2)), dim = -1)
-        
+        return torch.cat((neg.unsqueeze(-2), out.unsqueeze(-2)), dim=-1)
+
     def load_state_dict(self, state_dict):
-        fin = {'center': state_dict['final.center']}
+        fin = {"center": state_dict["final.center"]}
         self.score_fn.load_state_dict(fin)
-        del state_dict['final.center']
-        self.model.load_state_dict(state_dict)  
+        del state_dict["final.center"]
+        self.model.load_state_dict(state_dict)
 
     def eval(self):
         self.model.eval()
@@ -234,10 +304,12 @@ class AIR(nn.Module):
 
     def optimizer(self, opt, **params):
         optimizer = getattr(torch.optim, opt[0])(self.model.parameters(), **params)
-        l_optimizer = getattr(torch.optim, opt[1])(self.score_fn.parameters(), params['lr'])
+        l_optimizer = getattr(torch.optim, opt[1])(
+            self.score_fn.parameters(), params["lr"]
+        )
         return [optimizer, l_optimizer]
 
     def save_state(self, path):
         state_dict = self.model.state_dict()
-        state_dict['final.center'] = self.score_fn.state_dict()['center']
+        state_dict["final.center"] = self.score_fn.state_dict()["center"]
         torch.save(state_dict, path)

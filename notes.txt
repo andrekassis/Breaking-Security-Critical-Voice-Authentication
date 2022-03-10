@@ -1,3 +1,0 @@
-change window of spectralgate between hamming to kaiser and monitor tradeoff. 
-change hop_size in stft attack parameters between 160 and 256 and window_length/nfft between 400 to 512 respectively and monitor noise.
-

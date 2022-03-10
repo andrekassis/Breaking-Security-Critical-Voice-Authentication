@@ -4,38 +4,50 @@ import numpy as np
 from collections import namedtuple
 from utils.audio.feats import LFCC
 
-Genotype = namedtuple('Genotype', 'normal normal_concat reduce reduce_concat')
+Genotype = namedtuple("Genotype", "normal normal_concat reduce reduce_concat")
 
 OPS = {
-    'none': lambda C, stride, affine: Zero(stride),
-    'avg_pool_3x3': lambda C, stride, affine: nn.AvgPool2d(3, stride=stride, padding=1, count_include_pad=False),
-    'max_pool_3x3': lambda C, stride, affine: nn.MaxPool2d(3, stride=stride, padding=1),
-    'skip_connect': lambda C, stride, affine: Identity() if stride == 1 else FactorizedReduce(C, C, affine=affine),
-    'sep_conv_3x3': lambda C, stride, affine: SepConv(C, C, 3, stride, 1, affine=affine),
-    'sep_conv_5x5': lambda C, stride, affine: SepConv(C, C, 5, stride, 2, affine=affine),
-    'sep_conv_7x7': lambda C, stride, affine: SepConv(C, C, 7, stride, 3, affine=affine),
-    'dil_conv_3x3': lambda C, stride, affine: DilConv(C, C, 3, stride, 2, 2, affine=affine),
-    'dil_conv_5x5': lambda C, stride, affine: DilConv(C, C, 5, stride, 4, 2, affine=affine),
-    'conv_7x1_1x7': lambda C, stride, affine: nn.Sequential(
+    "none": lambda C, stride, affine: Zero(stride),
+    "avg_pool_3x3": lambda C, stride, affine: nn.AvgPool2d(
+        3, stride=stride, padding=1, count_include_pad=False
+    ),
+    "max_pool_3x3": lambda C, stride, affine: nn.MaxPool2d(3, stride=stride, padding=1),
+    "skip_connect": lambda C, stride, affine: Identity()
+    if stride == 1
+    else FactorizedReduce(C, C, affine=affine),
+    "sep_conv_3x3": lambda C, stride, affine: SepConv(
+        C, C, 3, stride, 1, affine=affine
+    ),
+    "sep_conv_5x5": lambda C, stride, affine: SepConv(
+        C, C, 5, stride, 2, affine=affine
+    ),
+    "sep_conv_7x7": lambda C, stride, affine: SepConv(
+        C, C, 7, stride, 3, affine=affine
+    ),
+    "dil_conv_3x3": lambda C, stride, affine: DilConv(
+        C, C, 3, stride, 2, 2, affine=affine
+    ),
+    "dil_conv_5x5": lambda C, stride, affine: DilConv(
+        C, C, 5, stride, 4, 2, affine=affine
+    ),
+    "conv_7x1_1x7": lambda C, stride, affine: nn.Sequential(
         nn.ReLU(inplace=False),
-        nn.Conv2d(C, C, (1, 7), stride=(1, stride),
-                  padding=(0, 3), bias=False),
-        nn.Conv2d(C, C, (7, 1), stride=(stride, 1),
-                  padding=(3, 0), bias=False),
-        nn.BatchNorm2d(C, affine=affine)
+        nn.Conv2d(C, C, (1, 7), stride=(1, stride), padding=(0, 3), bias=False),
+        nn.Conv2d(C, C, (7, 1), stride=(stride, 1), padding=(3, 0), bias=False),
+        nn.BatchNorm2d(C, affine=affine),
     ),
 }
 
 
 class ReLUConvBN(nn.Module):
-
     def __init__(self, C_in, C_out, kernel_size, stride, padding, affine=True):
         super(ReLUConvBN, self).__init__()
         self.op = nn.Sequential(
             nn.ReLU(inplace=False),
-            nn.Conv2d(C_in, C_out, kernel_size, stride=stride,
-                      padding=padding, bias=False),
-            nn.BatchNorm2d(C_out, affine=affine)
+            nn.Conv2d(
+                C_in, C_out, kernel_size, stride=stride, padding=padding, bias=False
+            ),
+            nn.BatchNorm2d(C_out, affine=affine),
         )
 
     def forward(self, x):
@@ -43,13 +55,22 @@ class ReLUConvBN(nn.Module):
 
 
 class DilConv(nn.Module):
-
-    def __init__(self, C_in, C_out, kernel_size, stride, padding, dilation, affine=True):
+    def __init__(
+        self, C_in, C_out, kernel_size, stride, padding, dilation, affine=True
+    ):
         super(DilConv, self).__init__()
         self.op = nn.Sequential(
             nn.ReLU(inplace=False),
-            nn.Conv2d(C_in, C_in, kernel_size=kernel_size, stride=stride,
-                      padding=padding, dilation=dilation, groups=C_in, bias=False),
+            nn.Conv2d(
+                C_in,
+                C_in,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                dilation=dilation,
+                groups=C_in,
+                bias=False,
+            ),
             nn.Conv2d(C_in, C_out, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(C_out, affine=affine),
         )
@@ -59,18 +80,31 @@ class DilConv(nn.Module):
 
 
 class SepConv(nn.Module):
-
     def __init__(self, C_in, C_out, kernel_size, stride, padding, affine=True):
         super(SepConv, self).__init__()
         self.op = nn.Sequential(
             nn.ReLU(inplace=False),
-            nn.Conv2d(C_in, C_in, kernel_size=kernel_size, stride=stride,
-                      padding=padding, groups=C_in, bias=False),
+            nn.Conv2d(
+                C_in,
+                C_in,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                groups=C_in,
+                bias=False,
+            ),
             nn.Conv2d(C_in, C_in, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(C_in, affine=affine),
             nn.ReLU(inplace=False),
-            nn.Conv2d(C_in, C_in, kernel_size=kernel_size, stride=1,
-                      padding=padding, groups=C_in, bias=False),
+            nn.Conv2d(
+                C_in,
+                C_in,
+                kernel_size=kernel_size,
+                stride=1,
+                padding=padding,
+                groups=C_in,
+                bias=False,
+            ),
             nn.Conv2d(C_in, C_out, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(C_out, affine=affine),
         )
@@ -80,7 +114,6 @@ class SepConv(nn.Module):
 
 
 class Identity(nn.Module):
-
     def __init__(self):
         super(Identity, self).__init__()
 
@@ -89,27 +122,23 @@ class Identity(nn.Module):
 
 
 class Zero(nn.Module):
-
     def __init__(self, stride):
         super(Zero, self).__init__()
         self.stride = stride
 
     def forward(self, x):
         if self.stride == 1:
-            return x.mul(0.)
-        return x[:, :, ::self.stride, ::self.stride].mul(0.)
+            return x.mul(0.0)
+        return x[:, :, :: self.stride, :: self.stride].mul(0.0)
 
 
 class FactorizedReduce(nn.Module):
-
     def __init__(self, C_in, C_out, affine=True):
         super(FactorizedReduce, self).__init__()
         assert C_out % 2 == 0
         self.relu = nn.ReLU(inplace=False)
-        self.conv_1 = nn.Conv2d(C_in, C_out // 2, 1,
-                                stride=2, padding=0, bias=False)
-        self.conv_2 = nn.Conv2d(C_in, C_out // 2, 1,
-                                stride=2, padding=0, bias=False)
+        self.conv_1 = nn.Conv2d(C_in, C_out // 2, 1, stride=2, padding=0, bias=False)
+        self.conv_2 = nn.Conv2d(C_in, C_out // 2, 1, stride=2, padding=0, bias=False)
         self.bn = nn.BatchNorm2d(C_out, affine=affine)
 
     def forward(self, x):
@@ -120,8 +149,8 @@ class FactorizedReduce(nn.Module):
 
 
 def drop_path(x, drop_prob):
-    if drop_prob > 0.:
-        keep_prob = 1.-drop_prob
+    if drop_prob > 0.0:
+        keep_prob = 1.0 - drop_prob
         mask = torch.cuda.FloatTensor(x.size(0), 1, 1, 1).bernoulli_(keep_prob)
         x.div_(keep_prob)
         x.mul_(mask)
@@ -129,15 +158,13 @@ def drop_path(x, drop_prob):
 
 
 class Cell(nn.Module):
-
     def __init__(self, genotype, C_prev_prev, C_prev, C, reduction, reduction_prev):
         super(Cell, self).__init__()
 
         if reduction_prev:
             self.preprocess0 = FactorizedReduce(C_prev_prev, C, affine=False)
         else:
-            self.preprocess0 = ReLUConvBN(
-                C_prev_prev, C, 1, 1, 0, affine=False)
+            self.preprocess0 = ReLUConvBN(C_prev_prev, C, 1, 1, 0, affine=False)
         self.preprocess1 = ReLUConvBN(C_prev, C, 1, 1, 0, affine=False)
 
         if reduction:
@@ -173,7 +200,7 @@ class Cell(nn.Module):
             op2 = self._ops[2 * i + 1]
             h1 = op1(h1)
             h2 = op2(h2)
-            if self.training and drop_prob > 0.:
+            if self.training and drop_prob > 0.0:
                 if not isinstance(op1, Identity):
                     h1 = drop_path(h1, drop_prob)
                 if not isinstance(op2, Identity):
@@ -184,8 +211,7 @@ class Cell(nn.Module):
 
 
 class Network(nn.Module):
-
-    def __init__(self, C, layers, num_classes, genotype, device = 'cuda:0'):
+    def __init__(self, C, layers, num_classes, genotype, device="cuda:0"):
         super(Network, self).__init__()
         self._C = C
         self._num_classes = num_classes
@@ -193,12 +219,10 @@ class Network(nn.Module):
         genotype = eval(genotype)
 
         self.stem0 = nn.Sequential(
-            nn.Conv2d(1, C // 2, kernel_size=3,
-                      stride=2, padding=1, bias=False),
+            nn.Conv2d(1, C // 2, kernel_size=3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(C // 2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(C // 2, C, kernel_size=3,
-                      stride=2, padding=1, bias=False),
+            nn.Conv2d(C // 2, C, kernel_size=3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(C),
         )
 
@@ -219,15 +243,27 @@ class Network(nn.Module):
             else:
                 reduction = False
 
-            cell = Cell(genotype, C_prev_prev, C_prev,
-                        C_curr, reduction, reduction_prev)
+            cell = Cell(
+                genotype, C_prev_prev, C_prev, C_curr, reduction, reduction_prev
+            )
             reduction_prev = reduction
             self.cells += [cell]
             C_prev_prev, C_prev = C_prev, cell.multiplier * C_curr
 
         self.global_pooling = nn.AdaptiveAvgPool2d((1, 1))
-        self.feature = LFCC(fl=1024, fs=256, fn=1024, sr=16000, filter_num=70,
-                            num_ceps=20, skip=False, with_energy=False, with_emphasis=False, compress=True, device = device)
+        self.feature = LFCC(
+            fl=1024,
+            fs=256,
+            fn=1024,
+            sr=16000,
+            filter_num=70,
+            num_ceps=20,
+            skip=False,
+            with_energy=False,
+            with_emphasis=False,
+            compress=True,
+            device=device,
+        )
         self.classifier = nn.Linear(C_prev, num_classes)
 
     def forward(self, input, is_mask=False, eval=False):

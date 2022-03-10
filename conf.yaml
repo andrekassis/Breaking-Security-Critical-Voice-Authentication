@@ -10,7 +10,7 @@ num_samples: 10
 
 log_interval: 1
 perf_log: perf.txt
-verbose: True
+verbose: False #True
 print_iter_out: True
 write_wavs: True
 write_plots: True
@@ -51,6 +51,9 @@ TIME_DOMAIN_ATTACK:
 FFT_Attack:
     epsilon: 0.015
     max_iter: 10
+    factor: null
+    thresh: null
+    sr: null
 
 STFT_Attack:
     epsilon: 0.0005 #0.05
@@ -59,6 +62,9 @@ STFT_Attack:
     window: 'kaiser_window' #'kaiser_window' #kaiser_window hann_window hamming_window bartlett_window blackman_window
     hop_length: 256 ##160
     win_length: 512 #400 #1024 
+    factor: null
+    thresh: null
+    sr: null
 
 auto_pgd:
     #norm: 2
@@ -116,20 +122,26 @@ CM_Attack:
     mid_layers: [
                  {'type': 'STFT_Attack',
                   'args': { 
-                           epsilon: 0.0002,
+                           epsilon: 0.0003, #2,
                            delta: 0,
                            nfft: 512,
                            window: 'kaiser_window', 
                            hop_length: 256, 
                            win_length: 512, 
-                           max_iter: 1
+                           max_iter: 1,
+                           factor: 0.25,
+                           thresh: 2500,
+                           sr: 16000
                           }
                  },
                  {'type': 'FFT_Attack',
                   'args': { 
                            epsilon: 0.2,
                            delta: 0,
-                           max_iter: 1
+                           max_iter: 1,
+                           factor: 0.25,
+                           thresh: 2500,
+                           sr: 16000
                           }
                  }
                 ]
@@ -142,7 +154,7 @@ CM_Attack:
         FFT_Attack: 1.2
     r_c:
         stationary: true
-        win: 'hamming_window'
+        win: 'blackman_window' #'bartlett_window' #'hamming_window' #'hann_window' #'hamming_window' #'kaiser_window' #'hamming_window'
         n_fft: 1024
         hop_length: 256
         win_length: 1024

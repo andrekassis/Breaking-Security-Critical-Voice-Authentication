@@ -10,15 +10,38 @@ class RSM1D(nn.Module):
         self.channels_in = channels_in
         self.channels_out = channels_out
 
-        self.conv1 = nn.Conv1d(in_channels=channels_in, out_channels=channels_out, bias=False, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv1d(in_channels=channels_out, out_channels=channels_out, bias=False, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv1d(in_channels=channels_out, out_channels=channels_out, bias=False, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv1d(
+            in_channels=channels_in,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            padding=1,
+        )
+        self.conv2 = nn.Conv1d(
+            in_channels=channels_out,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            padding=1,
+        )
+        self.conv3 = nn.Conv1d(
+            in_channels=channels_out,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            padding=1,
+        )
 
         self.bn1 = nn.BatchNorm1d(channels_out)
         self.bn2 = nn.BatchNorm1d(channels_out)
         self.bn3 = nn.BatchNorm1d(channels_out)
 
-        self.nin = nn.Conv1d(in_channels=channels_in, out_channels=channels_out, bias=False, kernel_size=1)
+        self.nin = nn.Conv1d(
+            in_channels=channels_in,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=1,
+        )
 
     def forward(self, xx):
         yy = F.relu(self.bn1(self.conv1(xx)))
@@ -37,15 +60,38 @@ class RSM2D(nn.Module):
         self.channels_in = channels_in
         self.channels_out = channels_out
 
-        self.conv1 = nn.Conv2d(in_channels=channels_in, out_channels=channels_out, bias=False, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=channels_out, out_channels=channels_out, bias=False, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=channels_out, out_channels=channels_out, bias=False, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(
+            in_channels=channels_in,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            padding=1,
+        )
+        self.conv2 = nn.Conv2d(
+            in_channels=channels_out,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            padding=1,
+        )
+        self.conv3 = nn.Conv2d(
+            in_channels=channels_out,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            padding=1,
+        )
 
         self.bn1 = nn.BatchNorm2d(channels_out)
         self.bn2 = nn.BatchNorm2d(channels_out)
         self.bn3 = nn.BatchNorm2d(channels_out)
 
-        self.nin = nn.Conv2d(in_channels=channels_in, out_channels=channels_out, bias=False, kernel_size=1)
+        self.nin = nn.Conv2d(
+            in_channels=channels_in,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=1,
+        )
 
     def forward(self, xx):
         yy = F.relu(self.bn1(self.conv1(xx)))
@@ -61,7 +107,9 @@ class RSM2D(nn.Module):
 class SSDNet1D(nn.Module):  # Res-TSSDNet
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=16, kernel_size=7, padding=3, bias=False)
+        self.conv1 = nn.Conv1d(
+            in_channels=1, out_channels=16, kernel_size=7, padding=3, bias=False
+        )
         self.bn1 = nn.BatchNorm1d(16)
 
         self.RSM1 = RSM1D(channels_in=16, channels_out=32)
@@ -73,7 +121,7 @@ class SSDNet1D(nn.Module):  # Res-TSSDNet
         self.fc2 = nn.Linear(in_features=64, out_features=32)
         self.out = nn.Linear(in_features=32, out_features=2)
 
-    def forward(self, x, eval = False):
+    def forward(self, x, eval=False):
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.max_pool1d(x, kernel_size=4)
 
@@ -94,7 +142,6 @@ class SSDNet1D(nn.Module):  # Res-TSSDNet
         x = self.out(x)
         return x
 
-
     def save_state(self, path):
         state_dict = self.state_dict()
         torch.save(state_dict, path)
@@ -103,10 +150,13 @@ class SSDNet1D(nn.Module):  # Res-TSSDNet
         optimizer = getattr(torch.optim, opt)(self.parameters(), **params)
         return [optimizer]
 
+
 class SSDNet2D(nn.Module):  # 2D-Res-TSSDNet
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=7, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(
+            in_channels=1, out_channels=16, kernel_size=7, padding=3, bias=False
+        )
         self.bn1 = nn.BatchNorm2d(16)
 
         self.RSM1 = RSM2D(channels_in=16, channels_out=32)
@@ -145,11 +195,39 @@ class DilatedCovModule(nn.Module):
     def __init__(self, channels_in, channels_out):
         super().__init__()
 
-        channels_out = int(channels_out/4)
-        self.cv1 = nn.Conv1d(in_channels=channels_in, out_channels=channels_out, bias=False, kernel_size=3, dilation=1, padding=1)
-        self.cv2 = nn.Conv1d(in_channels=channels_in, out_channels=channels_out, bias=False, kernel_size=3, dilation=2, padding=2)
-        self.cv4 = nn.Conv1d(in_channels=channels_in, out_channels=channels_out, bias=False, kernel_size=3, dilation=4, padding=4)
-        self.cv8 = nn.Conv1d(in_channels=channels_in, out_channels=channels_out, bias=False, kernel_size=3, dilation=8, padding=8)
+        channels_out = int(channels_out / 4)
+        self.cv1 = nn.Conv1d(
+            in_channels=channels_in,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            dilation=1,
+            padding=1,
+        )
+        self.cv2 = nn.Conv1d(
+            in_channels=channels_in,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            dilation=2,
+            padding=2,
+        )
+        self.cv4 = nn.Conv1d(
+            in_channels=channels_in,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            dilation=4,
+            padding=4,
+        )
+        self.cv8 = nn.Conv1d(
+            in_channels=channels_in,
+            out_channels=channels_out,
+            bias=False,
+            kernel_size=3,
+            dilation=8,
+            padding=8,
+        )
         self.bn1 = nn.BatchNorm1d(channels_out)
         self.bn2 = nn.BatchNorm1d(channels_out)
         self.bn4 = nn.BatchNorm1d(channels_out)
@@ -167,7 +245,9 @@ class DilatedCovModule(nn.Module):
 class DilatedNet(nn.Module):  # Inc-TSSDNet
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=16, kernel_size=7, padding=3, bias=False)
+        self.conv1 = nn.Conv1d(
+            in_channels=1, out_channels=16, kernel_size=7, padding=3, bias=False
+        )
         self.bn1 = nn.BatchNorm1d(16)
 
         self.DCM1 = DilatedCovModule(channels_in=16, channels_out=32)
@@ -196,15 +276,25 @@ class DilatedNet(nn.Module):  # Inc-TSSDNet
         return x
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     Res_TSSDNet = SSDNet1D()
     Res_TSSDNet_2D = SSDNet2D()
     Inc_TSSDNet = DilatedNet()
 
-    num_params_1D = sum(i.numel() for i in Res_TSSDNet.parameters() if i.requires_grad)  # 0.35M
-    num_params_2D = sum(i.numel() for i in Res_TSSDNet_2D.parameters() if i.requires_grad)  # 0.97M
-    num_params_Inc = sum(i.numel() for i in Inc_TSSDNet.parameters() if i.requires_grad)  # 0.09M
-    print('Number of learnable params: 1D_Res {}, 2D {}, 1D_Inc: {}.'.format(num_params_1D, num_params_2D, num_params_Inc))
+    num_params_1D = sum(
+        i.numel() for i in Res_TSSDNet.parameters() if i.requires_grad
+    )  # 0.35M
+    num_params_2D = sum(
+        i.numel() for i in Res_TSSDNet_2D.parameters() if i.requires_grad
+    )  # 0.97M
+    num_params_Inc = sum(
+        i.numel() for i in Inc_TSSDNet.parameters() if i.requires_grad
+    )  # 0.09M
+    print(
+        "Number of learnable params: 1D_Res {}, 2D {}, 1D_Inc: {}.".format(
+            num_params_1D, num_params_2D, num_params_Inc
+        )
+    )
 
     x1 = torch.randn(2, 1, 96000)
     x2 = torch.randn(2, 1, 432, 400)
@@ -212,4 +302,4 @@ if __name__ == '__main__':
     y2 = Res_TSSDNet_2D(x2)
     y3 = Inc_TSSDNet(x1)
 
-    print('End of Program.')
+    print("End of Program.")

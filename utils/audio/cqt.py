@@ -1,24 +1,28 @@
-import resampy
+# pylint: disable=E1102
+
+import math
+from functools import lru_cache
 import numpy as np
 import torch
 import scipy
+import resampy
 from librosa import get_fftlib
-import math
-from functools import lru_cache
+
 
 def _get_sinc_resample_kernel(
-        orig_freq: int,
-        new_freq: int,
-        gcd: int,
-        lowpass_filter_width: int,
-        rolloff: float,
-        resampling_method: str,
-        beta: float,
-        device: torch.device = torch.device("cpu"),
-        dtype: torch.dtype = None):
+    orig_freq: int,
+    new_freq: int,
+    gcd: int,
+    lowpass_filter_width: int,
+    rolloff: float,
+    resampling_method: str,
+    beta: float,
+    device: torch.device = torch.device("cpu"),
+    dtype: torch.dtype = None,
+):
 
-    if resampling_method not in ['sinc_interpolation', 'kaiser_window']:
-        raise ValueError('Invalid resampling method: {}'.format(resampling_method))
+    if resampling_method not in ["sinc_interpolation", "kaiser_window"]:
+        raise ValueError("Invalid resampling method: {}".format(resampling_method))
 
     orig_freq = int(orig_freq) // gcd
     new_freq = int(new_freq) // gcd
@@ -36,15 +40,17 @@ def _get_sinc_resample_kernel(
         t = t.clamp_(-lowpass_filter_width, lowpass_filter_width)
 
         if resampling_method == "sinc_interpolation":
-            window = torch.cos(t * math.pi / lowpass_filter_width / 2)**2
+            window = torch.cos(t * math.pi / lowpass_filter_width / 2) ** 2
         else:
             # kaiser_window
             if beta is None:
                 beta = 14.769656459379492
             beta_tensor = torch.tensor(float(beta))
-            window = torch.i0(beta_tensor * torch.sqrt(1 - (t / lowpass_filter_width) ** 2)) / torch.i0(beta_tensor)
+            window = torch.i0(
+                beta_tensor * torch.sqrt(1 - (t / lowpass_filter_width) ** 2)
+            ) / torch.i0(beta_tensor)
         t *= math.pi
-        kernel = torch.where(t == 0, torch.tensor(1.).to(t), torch.sin(t) / t)
+        kernel = torch.where(t == 0, torch.tensor(1.0).to(t), torch.sin(t) / t)
         kernel.mul_(window)
         kernels.append(kernel)
 
@@ -56,12 +62,12 @@ def _get_sinc_resample_kernel(
 
 
 def _apply_sinc_resample_kernel(
-        waveform: torch.Tensor,
-        orig_freq: int,
-        new_freq: int,
-        gcd: int,
-        kernel: torch.Tensor,
-        width: int,
+    waveform: torch.Tensor,
+    orig_freq: int,
+    new_freq: int,
+    gcd: int,
+    kernel: torch.Tensor,
+    width: int,
 ):
     orig_freq = int(orig_freq) // gcd
     new_freq = int(new_freq) // gcd
@@ -82,7 +88,15 @@ def _apply_sinc_resample_kernel(
     return resampled
 
 
-def resample_tensor(waveform, orig_freq, new_freq, lowpass_filter_width = 6, rolloff = 0.99, resampling_method = "sinc_interpolation", beta = None):
+def resample_tensor(
+    waveform,
+    orig_freq,
+    new_freq,
+    lowpass_filter_width=6,
+    rolloff=0.99,
+    resampling_method="sinc_interpolation",
+    beta=None,
+):
 
     assert orig_freq > 0.0 and new_freq > 0.0
 
@@ -91,26 +105,39 @@ def resample_tensor(waveform, orig_freq, new_freq, lowpass_filter_width = 6, rol
 
     gcd = math.gcd(int(orig_freq), int(new_freq))
 
-    kernel, width = _get_sinc_resample_kernel(orig_freq, new_freq, gcd, lowpass_filter_width, rolloff,
-                                              resampling_method, beta, waveform.device, waveform.dtype)
-    resampled = _apply_sinc_resample_kernel(waveform, orig_freq, new_freq, gcd, kernel, width)
+    kernel, width = _get_sinc_resample_kernel(
+        orig_freq,
+        new_freq,
+        gcd,
+        lowpass_filter_width,
+        rolloff,
+        resampling_method,
+        beta,
+        waveform.device,
+        waveform.dtype,
+    )
+    resampled = _apply_sinc_resample_kernel(
+        waveform, orig_freq, new_freq, gcd, kernel, width
+    )
     return resampled
-    
+
+
 def pad(x, leng):
     l_orig = x.shape[-1]
     x1 = x[:, 1:]
     x2 = torch.flip(x, [-1])[:, 1:]
     len1 = x1.shape[-1]
     len2 = x2.shape[-1]
-    
-    while(len1 - l_orig - leng + 1 < 0):
-        x1 = torch.cat((x, x2[:, :leng]), axis = -1)[:, 1: l_orig + leng]
-        x2 = torch.cat((torch.flip(x, [-1]), x1), axis = -1)[:, 1: l_orig + leng]
+
+    while len1 - l_orig - leng + 1 < 0:
+        x1 = torch.cat((x, x2[:, :leng]), axis=-1)[:, 1 : l_orig + leng]
+        x2 = torch.cat((torch.flip(x, [-1]), x1), axis=-1)[:, 1 : l_orig + leng]
         len1 = x1.shape[-1]
-        
-    res = torch.cat((torch.flip(x2, [-1])[:, :leng], x, x1[:, -leng:]), axis = -1)
+
+    res = torch.cat((torch.flip(x2, [-1])[:, :leng], x, x1[:, -leng:]), axis=-1)
     return res
-    
+
+
 def tiny(x):
     x = np.asarray(x)
 
@@ -123,19 +150,20 @@ def tiny(x):
         dtype = np.float32
 
     return np.finfo(dtype).tiny
-    
+
+
 def get_window(window, Nx, fftbins=True):
     if callable(window):
         return window(Nx)
 
-    elif isinstance(window, (str, tuple)) or np.isscalar(window):
+    if isinstance(window, (str, tuple)) or np.isscalar(window):
         return scipy.signal.get_window(window, Nx, fftbins=fftbins)
 
-    elif isinstance(window, (np.ndarray, list)):
+    if isinstance(window, (np.ndarray, list)):
         if len(window) == Nx:
             return np.asarray(window)
 
-        
+
 def pad_center(data, size, axis=-1, **kwargs):
     kwargs.setdefault("mode", "constant")
 
@@ -147,7 +175,8 @@ def pad_center(data, size, axis=-1, **kwargs):
     lengths[axis] = (lpad, int(size - n - lpad))
 
     return np.pad(data, lengths, **kwargs)
-    
+
+
 def normalize(S, norm=np.inf, axis=0, threshold=None, fill=None):
     if threshold is None:
         threshold = tiny(S)
@@ -168,7 +197,7 @@ def normalize(S, norm=np.inf, axis=0, threshold=None, fill=None):
         length = np.sum(mag > 0, axis=axis, keepdims=True, dtype=mag.dtype)
 
     elif np.issubdtype(type(norm), np.number) and norm > 0:
-        length = np.sum(mag ** norm, axis=axis, keepdims=True) ** (1.0 / norm)
+        length = np.sum(mag**norm, axis=axis, keepdims=True) ** (1.0 / norm)
 
         if axis is None:
             fill_norm = mag.size ** (-1.0 / norm)
@@ -195,7 +224,8 @@ def normalize(S, norm=np.inf, axis=0, threshold=None, fill=None):
         Snorm[:] = S / length
 
     return Snorm
-    
+
+
 def __float_window(window_spec):
     def _wrap(n, *args, **kwargs):
         """The wrapped window"""
@@ -211,7 +241,8 @@ def __float_window(window_spec):
         return window
 
     return _wrap
-    
+
+
 def constant_q(
     sr,
     fmin=None,
@@ -265,7 +296,8 @@ def constant_q(
     )
 
     return filters, np.asarray(lengths)
-    
+
+
 WINDOW_BANDWIDTHS = {
     "bart": 1.3334961334912805,
     "barthann": 1.4560255965133932,
@@ -309,6 +341,7 @@ WINDOW_BANDWIDTHS = {
     "triangle": 1.3331706523555851,
 }
 
+
 def sparsify_rows(x, quantile=0.01, dtype=None):
     if x.ndim == 1:
         x = x.reshape((1, -1))
@@ -331,7 +364,8 @@ def sparsify_rows(x, quantile=0.01, dtype=None):
         x_sparse[i, idx] = x[i, idx]
 
     return x_sparse.tocsr()
-    
+
+
 def fix_length(data, size, axis=-1, **kwargs):
     kwargs.setdefault("mode", "constant")
 
@@ -342,33 +376,49 @@ def fix_length(data, size, axis=-1, **kwargs):
         slices[axis] = slice(0, size)
         return data[tuple(slices)]
 
-    elif n < size:
+    if n < size:
         lengths = [(0, 0)] * data.ndim
         lengths[axis] = (0, size - n)
         return np.pad(data, lengths, **kwargs)
 
     return data
-    
-def resample(y, orig_sr, target_sr, res_type='kaiser_best', fix=True, scale=False, **kwargs):
+
+
+def resample(
+    y, orig_sr, target_sr, res_type="kaiser_best", fix=True, scale=False, **kwargs
+):
     if orig_sr == target_sr:
         return y
 
     ratio = float(target_sr) / orig_sr
     n_samples = int(np.ceil(y.shape[-1] * ratio))
     if res_type == "kaiser_best":
-        #y_hat = F.resample(y, orig_sr, target_sr, lowpgass_filter_width=64, rolloff=0.9475937167399596, resampling_method = "kaiser_window", beta=14.769656459379492)
-        y_hat = resample_tensor(y, orig_sr, target_sr, lowpass_filter_width=64, rolloff=0.9475937167399596, resampling_method = "kaiser_window", beta=14.769656459379492)
+        y_hat = resample_tensor(
+            y,
+            orig_sr,
+            target_sr,
+            lowpass_filter_width=64,
+            rolloff=0.9475937167399596,
+            resampling_method="kaiser_window",
+            beta=14.769656459379492,
+        )
     elif res_type == "kaiser_fast":
-        #y_hat = F.resample(y, orig_sr, target_sr, lowgpass_filter_width=16, rolloff=0.85, resampling_method = "kaiser_window", beta=8.555504641634386)
-        y_hat = resample_tensor(y, orig_sr, target_sr, lowpass_filter_width=16, rolloff=0.85, resampling_method = "kaiser_window", beta=8.555504641634386)
-    #y_hat = resampy.resample(y, orig_sr, target_sr, filter=res_type, axis=-1)
+        y_hat = resample_tensor(
+            y,
+            orig_sr,
+            target_sr,
+            lowpass_filter_width=16,
+            rolloff=0.85,
+            resampling_method="kaiser_window",
+            beta=8.555504641634386,
+        )
+
     y_hat = fix_length(y_hat, n_samples, **kwargs)
     y_hat /= np.sqrt(ratio)
 
-    return y_hat #np.asfortranarray(y_hat, dtype=y.dtype)
-    
-    
-    
+    return y_hat
+
+
 def window_bandwidth(window, n=1000):
     if hasattr(window, "__name__"):
         key = window.__name__
@@ -376,8 +426,11 @@ def window_bandwidth(window, n=1000):
         key = window
 
     return WINDOW_BANDWIDTHS[key]
-    
-def constant_q_lengths(sr, fmin, n_bins=84, bins_per_octave=12, window="hann", filter_scale=1, gamma=0):
+
+
+def constant_q_lengths(
+    sr, fmin, n_bins=84, bins_per_octave=12, window="hann", filter_scale=1, gamma=0
+):
     alpha = 2.0 ** (1.0 / bins_per_octave) - 1.0
     Q = float(filter_scale) / alpha
 
@@ -387,7 +440,8 @@ def constant_q_lengths(sr, fmin, n_bins=84, bins_per_octave=12, window="hann", f
     lengths = Q * sr / (freq + gamma / alpha)
 
     return lengths
-    
+
+
 def __num_two_factors(x):
     if x <= 0:
         return 0
@@ -397,9 +451,10 @@ def __num_two_factors(x):
         x //= 2
 
     return num_twos
-    
+
+
 def __early_downsample_count(nyquist, filter_cutoff, hop_length, n_octaves):
-    BW_FASTEST = resampy.filters.get_filter('kaiser_fast')[2]
+    BW_FASTEST = resampy.filters.get_filter("kaiser_fast")[2]
 
     downsample_count1 = max(
         0, int(np.ceil(np.log2(BW_FASTEST * nyquist / filter_cutoff)) - 1) - 1
@@ -409,8 +464,11 @@ def __early_downsample_count(nyquist, filter_cutoff, hop_length, n_octaves):
     downsample_count2 = max(0, num_twos - n_octaves + 1)
 
     return min(downsample_count1, downsample_count2)
-    
-def __early_downsample(y, sr, hop_length, res_type, n_octaves, nyquist, filter_cutoff, scale):
+
+
+def __early_downsample(
+    y, sr, hop_length, res_type, n_octaves, nyquist, filter_cutoff, scale
+):
 
     downsample_count = __early_downsample_count(
         nyquist, filter_cutoff, hop_length, n_octaves
@@ -422,38 +480,49 @@ def __early_downsample(y, sr, hop_length, res_type, n_octaves, nyquist, filter_c
         hop_length //= downsample_factor
         new_sr = sr / float(downsample_factor)
         y = resample(y, sr, new_sr, res_type=res_type, scale=True)
-        
+
         if not scale:
             y *= np.sqrt(downsample_factor)
 
         sr = new_sr
 
     return y, sr, hop_length
-    
+
+
 def cqt_frequencies(n_bins, fmin, bins_per_octave=12, tuning=0.0):
     correction = 2.0 ** (float(tuning) / bins_per_octave)
     frequencies = 2.0 ** (np.arange(0, n_bins, dtype=float) / bins_per_octave)
 
     return correction * fmin * frequencies
 
+
 def __trim_stack(cqt_resp, n_bins):
-    cqt_resp = [ [ cqt_resp[i][j] for i in range(len(cqt_resp)) ] for j in range(len(cqt_resp[0])) ]  
-    max_col = [ min(c_i.shape[-1] for c_i in c) for c in cqt_resp ]
-    cqt_out = [ torch.zeros((n_bins, max_col[i]), dtype=cqt_resp[0][0].dtype, device = cqt_resp[0][0].device)
-                                          for i in range(len(max_col)) ]
+    cqt_resp = [
+        [cqt_resp[i][j] for i in range(len(cqt_resp))] for j in range(len(cqt_resp[0]))
+    ]
+    max_col = [min(c_i.shape[-1] for c_i in c) for c in cqt_resp]
+    cqt_out = [
+        torch.zeros(
+            (n_bins, max_col[i]),
+            dtype=cqt_resp[0][0].dtype,
+            device=cqt_resp[0][0].device,
+        )
+        for i in range(len(max_col))
+    ]
 
     for i, _ in enumerate(cqt_resp):
         end = n_bins
         for c_i in cqt_resp[i]:
             n_oct = c_i.shape[0]
             if end < n_oct:
-                cqt_out[i][:end] = c_i[-end:, :max_col[i]]
+                cqt_out[i][:end] = c_i[-end:, : max_col[i]]
             else:
-                cqt_out[i][end - n_oct : end] = c_i[:, :max_col[i]]
-        
+                cqt_out[i][end - n_oct : end] = c_i[:, : max_col[i]]
+
             end -= n_oct
-    cqt_out = torch.stack(cqt_out) 
+    cqt_out = torch.stack(cqt_out)
     return cqt_out
+
 
 @lru_cache(maxsize=None)
 def __cqt_filter_fft(
@@ -500,19 +569,30 @@ def __cqt_filter_fft(
     fft_basis = sparsify_rows(fft_basis, quantile=sparsity, dtype=dtype)
 
     return fft_basis, n_fft, lengths
-    
+
+
 def __cqt_response(y, n_fft, hop_length, fft_basis, mode, dtype=None):
     """Compute the filter response with a target STFT hop."""
-    
+
     y = pad(y, n_fft // 2)
     # Compute the STFT matrix
-    D = torch.stft(y, n_fft, hop_length=hop_length, window=None,
-                                    center=False, pad_mode=mode, normalized=False, onesided=None, return_complex=True)
+    D = torch.stft(
+        y,
+        n_fft,
+        hop_length=hop_length,
+        window=None,
+        center=False,
+        pad_mode=mode,
+        normalized=False,
+        onesided=None,
+        return_complex=True,
+    )
     # And filter response energy
     fft_basis = fft_basis.toarray()
-    fft_basis = torch.tensor(fft_basis, device = D.device)
+    fft_basis = torch.tensor(fft_basis, device=D.device)
     return torch.matmul(fft_basis, D)
-    
+
+
 def cqt(
     y,
     sr=22050,
@@ -530,7 +610,7 @@ def cqt(
 ):
     dtype = np.complex128
     gamma = 0
-    BW_FASTEST = resampy.filters.get_filter('kaiser_fast')[2]
+    BW_FASTEST = resampy.filters.get_filter("kaiser_fast")[2]
 
     # How many octaves are we dealing with?
     n_octaves = int(np.ceil(float(n_bins) / bins_per_octave))
@@ -549,9 +629,7 @@ def cqt(
 
     # Determine required resampling quality
     Q = float(filter_scale) / alpha
-    filter_cutoff = (
-        fmax_t * (1 + 0.5 * window_bandwidth(window) / Q) + 0.5 * gamma
-    )
+    filter_cutoff = fmax_t * (1 + 0.5 * window_bandwidth(window) / Q) + 0.5 * gamma
     nyquist = sr / 2.0
 
     auto_resample = True
@@ -612,7 +690,7 @@ def cqt(
 
         fft_basis, n_fft, _ = __cqt_filter_fft(
             my_sr,
-            fmin_t * 2.0 ** -i,
+            fmin_t * 2.0**-i,
             n_filters,
             bins_per_octave,
             filter_scale,
@@ -623,7 +701,7 @@ def cqt(
             dtype=dtype,
         )
 
-        fft_b = fft_basis[:] * np.sqrt(2 ** i)
+        fft_b = fft_basis[:] * np.sqrt(2**i)
         vqt_resp.append(
             __cqt_response(my_y, n_fft, my_hop, fft_b, pad_mode, dtype=dtype)
         )
@@ -640,5 +718,5 @@ def cqt(
             filter_scale=filter_scale,
             gamma=gamma,
         )
-        V = V / torch.sqrt(torch.tensor(lengths, device = V.device)[:, None])
+        V = V / torch.sqrt(torch.tensor(lengths, device=V.device)[:, None])
     return V
