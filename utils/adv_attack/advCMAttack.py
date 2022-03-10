@@ -100,7 +100,7 @@ class CM_Attack:
             print(
                 [
                     evalu[j].result(
-                        adv / np.max(np.abs(adv)), 1 - np.argmax(y, axis=1), eval=True
+                        adv / np.max(np.abs(adv)), 1 - np.argmax(y, axis=1)
                     )[0]
                     for j in range(len(evalu))
                 ]
@@ -113,7 +113,7 @@ class CM_Attack:
 
         for k in tqdm(range(self.itrs), disable=not self.verbose):
             self._configure_attacks(k)
-            if k > 0:
+            if True:  # k > 0:
                 adv = self._first_pass(adv, y, **r_args)
             adv = self._reduce_noise(adv, k)
             adv = self._second_pass(adv, y, **r_args)

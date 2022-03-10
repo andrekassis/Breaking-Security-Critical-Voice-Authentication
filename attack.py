@@ -212,6 +212,7 @@ def prepare_iter(sample, exp, device):
 def run_iter(sample, exp, device, **r_args):
     x, y = load_input(sample[0], exp["wav_dir"])
     exp = prepare_iter(sample, exp, device)
+
     try:
         adv = exp["Attacker"].generate(x, y, evalu=exp["eval_cm"], **r_args)[1]
     # pylint: disable=W0703
@@ -253,7 +254,7 @@ def main(config, device, args):
         x, adv, y, ret = run_iter(sample, exp, device, **exp["r_args"])
         if ret:
             to_write = iter_stats(x, adv, y, sample, exp)
-        write_iter(x, adv, exp, sample, to_write)
+            write_iter(x, adv, exp, sample, to_write)
     print("done! # of failed samples: " + str(exp["failed"]))
 
 

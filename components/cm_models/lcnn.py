@@ -1,19 +1,16 @@
 import warnings
-
-warnings.simplefilter("ignore", Warning)
-warnings.filterwarnings("ignore", category=Warning)
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 import numpy as np
 from torch.nn import Parameter
 from torch.autograd import Variable
 
-# from .base_model import BaseModel
+warnings.simplefilter("ignore", Warning)
+warnings.filterwarnings("ignore", category=Warning)
 
 
-### A-softmax
 def mypsi(x, m):
     x = x * m
     return (
@@ -126,9 +123,6 @@ class AngleLoss(nn.Module):
         loss = loss.mean()
 
         return loss
-
-
-###
 
 
 class mfm(nn.Module):

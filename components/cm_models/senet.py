@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 import numpy as np
-from .base_model import BaseModel
 
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -75,8 +73,6 @@ class ResNet(nn.Module):
         num_classes=2,
         focal_loss=False,
     ):
-
-        # self.layer = 5
         self.inplanes = channels[0]
         self.focal_loss = focal_loss
 
@@ -136,44 +132,21 @@ class ResNet(nn.Module):
             params
         )
 
-    def forward(self, x, eval=False, mode=0):
-        # print(x.size())
+    def forward(self, x, eval=False):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        # print(x.size())
-
         x = self.layer1(x)
-
-        # if self.layer < 2 and mode == 1:
-        #    return x
-        # print(x.size())
         x = self.layer2(x)
-        # if self.layer < 3 and mode == 1:
-        #    return x
-        # print(x.size())
         x = self.layer3(x)
-
-        # if self.layer < 4 and mode == 1:
-        #    return x
-        # print(x.size())
         x = self.layer4(x)
-        # print(x.size())
-
         x = self.avgpool(x).view(x.size()[0], -1)
-
-        # if self.layer < 5 and mode == 1:
-        #    return x
-        # print(x.shape)
         out = self.classifier(x)
-        # print(out.shape)
 
-        # if self.focal_loss: return out
         if not eval:
             return (F.log_softmax(out, dim=-1), None)
-        else:
-            return F.log_softmax(out, dim=-1)
+        return F.log_softmax(out, dim=-1)
 
     def save_state(self, path):
         state_dict = self.state_dict()
@@ -184,21 +157,6 @@ class ResNet(nn.Module):
             filter(lambda p: p.requires_grad, self.parameters()), **params
         )
         return [optimizer]
-
-    # def set_layer(self, value):
-    #    return 0
-    #    old = self.layer
-    #    self.layer = value
-    #    return old
-
-
-# class SEResNet34(BaseModel):
-#     def __init__(self, layers=[3, 4, 6, 3], num_classes=2, focal_loss=False):
-#         super(SEResNet34, self).__init__()
-#         self.resnet =  ResNet(SEBasicBlock, layers=layers, num_classes=num_classes, focal_loss=focal_loss)
-
-#     def forward(self, x):
-#         return self.resnet(x)
 
 
 def se_resnet34(**kwargs):

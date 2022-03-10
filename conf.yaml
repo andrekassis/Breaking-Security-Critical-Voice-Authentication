@@ -10,7 +10,7 @@ num_samples: 10
 
 log_interval: 1
 perf_log: perf.txt
-verbose: False #True
+verbose: True
 print_iter_out: True
 write_wavs: True
 write_plots: True
@@ -30,10 +30,10 @@ loss: null
 discriminator_wb: 
     args: 
         cm: #ignored for ADVSR
-            selector: [AASSIST] #[SENet] #lcnnFull] #one of [SSNet, SENet, lcnnFull, lcnnHalf, rawGAT_st, mcg, mlcg, Res2Net, AIR, comparative, darts]
+            selector: [lcnnFull] #[SENet] #lcnnFull] #one of [SSNet, SENet, lcnnFull, lcnnHalf, rawGAT_st, mcg, mlcg, Res2Net, AIR, comparative, darts]
             lambda: 3 #ignored for ADVSR, ADVCM
         asv: #ignored for ADVCM
-            selector: [mfcc] #one of [mfcc, lps, xvec]
+            selector: [xvec] #one of [mfcc, lps, xvec]
             lambda: 1 #ignored for ADVSR, ADVCM
         
 
@@ -115,7 +115,7 @@ CM_Attack:
     last_layer:
         type: "TIME_DOMAIN_ATTACK"
         args:  
-            epsilon: 0.0002
+            epsilon: 0.002 #0.0002
             max_iter: 30
             delta: 0
         
@@ -124,10 +124,10 @@ CM_Attack:
                   'args': { 
                            epsilon: 0.0003, #2,
                            delta: 0,
-                           nfft: 512,
+                           nfft: 512, #400, #512,
                            window: 'kaiser_window', 
-                           hop_length: 256, 
-                           win_length: 512, 
+                           hop_length: 256, #160, #256, 
+                           win_length: 512, #400, #512, 
                            max_iter: 1,
                            factor: 0.25,
                            thresh: 2500,
@@ -154,7 +154,7 @@ CM_Attack:
         FFT_Attack: 1.2
     r_c:
         stationary: true
-        win: 'blackman_window' #'bartlett_window' #'hamming_window' #'hann_window' #'hamming_window' #'kaiser_window' #'hamming_window'
+        win: 'blackman_window' #'hann_window'
         n_fft: 1024
         hop_length: 256
         win_length: 1024
