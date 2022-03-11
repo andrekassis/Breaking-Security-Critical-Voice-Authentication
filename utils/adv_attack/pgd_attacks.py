@@ -23,10 +23,17 @@ class PGD(ABC):
         else:
             self.sg = None
 
-    def _transform(self, x):
+    def _convert_type(self, is_array):
+        if is_array:
+            return self.dtype
+        if self.dtype == np.complex128:
+            return torch.complex128
+        return torch.float64
+
+    def _transform(self, x, requires_grad=True):
         pass
 
-    def _inverse_transform(self, x):
+    def _inverse_transform(self, x, requires_grad=True):
         pass
 
     def _project(self, delta):
@@ -36,47 +43,76 @@ class PGD(ABC):
     def _sgn(x):
         pass
 
-    def clip(self, x):
+    def _clip_to_wav_range(self, x):
         return self._transform(self._inverse_transform(x).clip(-1, 1))
 
     def _clip(self, x):
         pass
 
-    def _gradient(self, x, y, **r_args):
-        var = torch.tensor(x, requires_grad=True, device=self.estimator.device)
-        x_t = self._inverse_transform(var)
-
-        if self.sg:
-            x_t = self.sg(x_t, **r_args)
-
-        grad = self.estimator.loss_gradient(x_t.detach().cpu().numpy(), y)
-        grad = torch.tensor(grad, device=self.estimator.device)
-
-        res = x_t * grad
-        res = torch.sum(res)
-        res.backward()
-
-        grad = var.grad.detach().cpu().numpy()
+    @staticmethod
+    def _retrieve_grad(var, x):
+        grad = var.grad
+        grad = grad.detach().cpu().numpy() if isinstance(x, np.ndarray) else grad
         return grad
 
-    def set_len(self, length):
+    @staticmethod
+    def _x_to_var(x, requires_grad, device):
+        var = (
+            torch.tensor(x, requires_grad=requires_grad, device=device)
+            if isinstance(x, np.ndarray)
+            else x
+        )
+        if requires_grad and var.requires_grad is False:
+            var.requires_grad = True
+            var.grad = None
+        return var
+
+    def _gradient(self, x, y, **r_args):
+        if not isinstance(x, np.ndarray):
+            x = x.detach().clone()
+
+        var = self._x_to_var(x, requires_grad=True, device=self.estimator.device)
+        x_t = self._inverse_transform(var)
+
+        x_t = self.sg(x_t, **r_args) if self.sg else x_t
+
+        res = self.estimator.compute_loss(x_t, y)
+        res.backward(retain_graph=True)
+
+        return self._retrieve_grad(var, x)
+
+    def _set_len(self, length, is_array):
         self.length = length
 
-    def _itr(self, X, y, **r_args):
-        self.set_len(X.shape[-1])
+    def _set_eps(self, shape, is_array):
+        if self.eps is None or self.eps.shape != shape:
+            if not is_array:
+                self.eps = torch.ones(shape, device=self.estimator.device)
+            else:
+                self.eps = np.ones(shape)
 
-        X_F = self._transform(X)
-        self.eps = np.ones(X_F.shape) * self.epsilon
+    def _itr(self, X, y, **r_args):
+        self._set_len(X.shape[-1], isinstance(X, np.ndarray))
+        X_F = self._transform(X, requires_grad=False)
+        self._set_eps(X_F.shape, isinstance(X, np.ndarray))
+
         if self.alpha is not None:
             alpha = self.alpha
         else:
-            alpha = self.eps / 10
+            alpha = self.eps * self.epsilon / 10
 
-        delta = np.random.uniform(size=X_F.shape).astype(self.type)
-        delta = 2 * self.eps * delta - self.eps
-        delta = self._project(delta)
-
-        if self.delta is not None:
+        if self.delta is None:
+            if isinstance(X, np.ndarray):
+                delta = np.random.uniform(size=X_F.shape).astype(
+                    self._convert_type(True)
+                )
+            else:
+                delta = torch.rand(size=X_F.shape, device=self.estimator.device).type(
+                    self._convert_type(False)
+                )
+            delta = 2 * self.eps * delta - (self.eps * self.epsilon)
+            delta = self._project(delta)
+        else:
             delta = self.delta
 
         # pylint: disable=W0612
@@ -84,10 +120,10 @@ class PGD(ABC):
             gradient = self._gradient(X_F + delta, y, **r_args)
             delta = delta - alpha * self._sgn(gradient)
             delta = self._clip(self._project(delta))
-            delta = self.clip(X_F + delta) - X_F
+            delta = self._clip_to_wav_range(X_F + delta) - X_F
         # pylint: enable=W0612
 
-        X_r = self._inverse_transform(X_F + delta)
+        X_r = self._inverse_transform(X_F + delta, requires_grad=False)
         delt = X_r[:, : X.shape[-1]] - X[:, : X_r.shape[-1]]
         return delt
 
@@ -105,10 +141,10 @@ class TIME_DOMAIN_ATTACK(PGD):
     def __init__(self, estimator, epsilon, max_iter, delta=None, r_c=None):
         super().__init__(estimator, epsilon, max_iter, np.float64, delta, r_c)
 
-    def _transform(self, x):
+    def _transform(self, x, requires_grad=True):
         return x
 
-    def _inverse_transform(self, x):
+    def _inverse_transform(self, x, requires_grad=True):
         return x
 
     def _project(self, delta):
@@ -119,7 +155,9 @@ class TIME_DOMAIN_ATTACK(PGD):
 
     @staticmethod
     def _sgn(x):
-        return np.sign(x)
+        if isinstance(x, np.ndarray):
+            return np.sign(x)
+        return torch.sign(x)
 
 
 class Spectral_Attack(PGD):
@@ -146,8 +184,13 @@ class Spectral_Attack(PGD):
             assert self.sr is not None
             assert self.thresh is not None
 
-    def set_len(self, length):
+    def _set_len(self, length, is_array):
         if self.length == length:
+            if is_array != isinstance(self.mask, np.ndarray):
+                if is_array:
+                    self.mask = self.mask.detach().cpu().numpy()
+                else:
+                    self.mask = torch.tensor(self.mask, device=self.estimator.device)
             return
 
         self.length = length
@@ -160,23 +203,48 @@ class Spectral_Attack(PGD):
 
         self.mask = np.ones((1, freq.shape[-1]), dtype=np.complex)
         self.mask[:, idx:] *= self.factor
+        if not is_array:
+            self.mask = torch.tensor(self.mask, device=self.estimator.device)
 
     def _clip(self, x):
+        if isinstance(x, np.ndarray):
+            return self._clip_np(x)
+        return self._clip_torch(x)
+
+    def _clip_torch(self, x):
+        sgn = torch.sign(x.real) + 1j * torch.sign(x.imag)
+        mag = (
+            torch.minimum(torch.abs(x.real), torch.abs(self.eps * self.epsilon))
+            + torch.minimum(torch.abs(x.imag), torch.abs(self.eps * self.epsilon)) * 1j
+        )
+        ret = sgn.real * mag.real + sgn.imag * mag.imag * 1j
+        return ret
+
+    def _clip_np(self, x):
         sgn = np.sign(x.real) + 1j * np.sign(x.imag)
         mag = (
-            np.minimum(np.abs(x.real), np.abs(self.eps))
-            + np.minimum(np.abs(x.imag), np.abs(self.eps)) * 1j
+            np.minimum(np.abs(x.real), np.abs(self.eps * self.epsilon))
+            + np.minimum(np.abs(x.imag), np.abs(self.eps * self.epsilon)) * 1j
         )
         ret = sgn.real * mag.real + sgn.imag * mag.imag * 1j
         return ret
 
     @staticmethod
     def _sgn(x):
-        return np.sign(x.real) + 1j * np.sign(x.imag)
+        if isinstance(x, np.ndarray):
+            return np.sign(x.real) + 1j * np.sign(x.imag)
+        return torch.sign(x.real) + 1j * torch.sign(x.imag)
 
     def _project(self, delta):
         if self.mask is None:
             return delta
+
+        if not isinstance(delta, np.ndarray):
+            return self._transform(
+                torch.fft.irfft(
+                    torch.fft.rfft(self._inverse_transform(delta)) * self.mask
+                )
+            )
 
         return self._transform(
             np.fft.irfft(np.fft.rfft(self._inverse_transform(delta)) * self.mask)
@@ -216,11 +284,11 @@ class STFT_Attack(Spectral_Attack):
         else:
             self.win = getattr(torch, window)(**win_args)
 
-    def _transform(self, x):
-        if isinstance(x, np.ndarray):
-            y = torch.tensor(x, device=self.estimator.device)
-        else:
-            y = x
+    def _transform(self, x, requires_grad=True):
+        y = self._x_to_var(x, requires_grad=requires_grad, device=self.estimator.device)
+        if requires_grad is False:
+            y = y.detach().clone()
+
         ret = torch.stft(
             y,
             n_fft=self.nfft,
@@ -233,15 +301,14 @@ class STFT_Attack(Spectral_Attack):
             onesided=False,
             return_complex=True,
         )
-        if isinstance(x, np.ndarray):
-            return ret.cpu().numpy()
+
+        ret = ret.detach().cpu().numpy() if isinstance(x, np.ndarray) else ret
         return ret
 
-    def _inverse_transform(self, x):
-        if isinstance(x, np.ndarray):
-            y = torch.tensor(x, device=self.estimator.device)
-        else:
-            y = x
+    def _inverse_transform(self, x, requires_grad=True):
+        y = self._x_to_var(x, requires_grad=requires_grad, device=self.estimator.device)
+        if requires_grad is False:
+            y = y.detach().clone()
 
         ret = torch.istft(
             y,
@@ -255,8 +322,8 @@ class STFT_Attack(Spectral_Attack):
             length=self.length,
             return_complex=False,
         )
-        if isinstance(x, np.ndarray):
-            return ret.cpu().numpy()
+
+        ret = ret.detach().cpu().numpy() if isinstance(x, np.ndarray) else ret
         return ret
 
 
@@ -274,12 +341,12 @@ class FFT_Attack(Spectral_Attack):
     ):
         super().__init__(estimator, epsilon, max_iter, delta, r_c, factor, thresh, sr)
 
-    def _transform(self, x):
-        if isinstance(x, np.ndarray):
-            return np.fft.rfft(x)
-        return torch.fft.rfft(x)
+    def _transform(self, x, requires_grad=True):
+        if requires_grad is False and not isinstance(x, np.ndarray):
+            x = x.detach().clone()
+        return np.fft.rfft(x) if isinstance(x, np.ndarray) else torch.fft.rfft(x)
 
-    def _inverse_transform(self, x):
-        if isinstance(x, np.ndarray):
-            return np.fft.irfft(x)
-        return torch.fft.irfft(x)
+    def _inverse_transform(self, x, requires_grad=True):
+        if requires_grad is False and not isinstance(x, np.ndarray):
+            x = x.detach().clone()
+        return np.fft.irfft(x) if isinstance(x, np.ndarray) else torch.fft.irfft(x)

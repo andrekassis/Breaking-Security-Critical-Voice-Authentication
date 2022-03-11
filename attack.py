@@ -212,13 +212,12 @@ def prepare_iter(sample, exp, device):
 def run_iter(sample, exp, device, **r_args):
     x, y = load_input(sample[0], exp["wav_dir"])
     exp = prepare_iter(sample, exp, device)
-
     try:
         adv = exp["Attacker"].generate(x, y, evalu=exp["eval_cm"], **r_args)[1]
     # pylint: disable=W0703
-    except Exception:
+    except Exception as e:
         exp["failed"] = exp["failed"] + 1
-        print("attack_failed! skipping")
+        print("attack_failed! message: " + str(e) + ". skipping")
         return x, x, y, False
     # pylint: enable=W0703
     return x, adv, y, True

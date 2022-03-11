@@ -143,7 +143,6 @@ def get_attacker(config, attack_type, system, device):
     elif attack_type == "CM_Attack":
         conf = config["CM_Attack"]
         conf["r_c"]["sr"] = config["sr"]
-        conf["verbose"] = config["verbose"]
         Attacker = CM_Attack(est, **conf)
     elif attack_type == "auto_pgd":
         est.set_input_shape((16000 * 6,))

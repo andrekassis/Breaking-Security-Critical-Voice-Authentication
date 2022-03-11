@@ -41,8 +41,10 @@ class SpectralGate(ABC):
             "device": self.device,
             "requires_grad": False,
         }
-
-        self.win = getattr(torch, win)(**win_args)
+        if win is not None:
+            self.win = getattr(torch, win)(**win_args)
+        else:
+            self.win = None
         self._time_constant_s = time_constant_s
         self._generate_mask_smoothing_filter(freq_mask_smooth_hz, time_mask_smooth_ms)
 

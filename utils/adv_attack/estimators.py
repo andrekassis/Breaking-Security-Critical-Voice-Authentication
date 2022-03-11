@@ -45,10 +45,19 @@ class ESTIMATOR(
             pass
 
     def class_gradient(self, x, label):
-        var = torch.tensor(x, device=self.device, dtype=torch.float, requires_grad=True)
+        if isinstance(x, np.ndarray):
+            var = torch.tensor(
+                x, device=self.device, dtype=torch.float, requires_grad=True
+            )
+        else:
+            var = x
+
         score = self.attack.get_score(var)[:, label[0]]
         score.backward()
-        grad = var.grad.detach().cpu().numpy()
+        grad = var.grad
+
+        if isinstance(x, np.ndarray):
+            grad = grad.detach().cpu().numpy()
         return grad
 
     def _loss(self, var, y):
@@ -58,16 +67,31 @@ class ESTIMATOR(
 
     def compute_loss(self, x, y, reduction="mean"):
         # pylint: disable=W0613
-        var = torch.tensor(x, device=self.device, dtype=torch.float)
-        loss = self._loss(var, y).detach().cpu().numpy()
+        if isinstance(x, np.ndarray):
+            var = torch.tensor(x, device=self.device, dtype=torch.float)
+        else:
+            var = x
+
+        loss = self._loss(var, y)
+        if isinstance(x, np.ndarray):
+            loss = loss.detach().cpu().numpy()
+
         return loss
 
     def loss_gradient(self, x, y):
-        var = torch.tensor(x, device=self.device, dtype=torch.float, requires_grad=True)
+        if isinstance(x, np.ndarray):
+            var = torch.tensor(
+                x, device=self.device, dtype=torch.float, requires_grad=True
+            )
+        else:
+            var = x
+
         loss = self._loss(var, y)
         loss.backward(retain_graph=True)
-        grad = var.grad.detach().cpu().numpy()
+        grad = var.grad
 
+        if isinstance(x, np.ndarray):
+            grad = grad.detach().cpu().numpy()
         # grad[ abs(grad) < np.max(np.abs(grad)) * 0.2] = 0
         # grad[ abs(grad) < np.max(np.abs(grad)) * 0.3] = 0
 
@@ -75,28 +99,34 @@ class ESTIMATOR(
 
     def predict(self, x, logits=None, batch_size=1):
         # pylint: disable=W0613
-        var = torch.tensor(x, device=self.device, dtype=torch.float)
-        pred = self.attack.get_score(var, self.logits).detach().cpu().numpy()
+        if isinstance(x, np.ndarray):
+            var = torch.tensor(x, device=self.device, dtype=torch.float)
+        else:
+            var = x
+
+        pred = self.attack.get_score(var, self.logits)
 
         # Find a better aggregation method for ADVJOINT (fixme)
         if np.prod(pred.shape) > 2:
             if (np.array([pred[0][1], pred[1][1]]) > self.eer).all():
-                return np.array([[0.0, 1.0]])
-            return np.array([[1.0, 0.0]])
+                pred = torch.tensor(np.array([[0.0, 1.0]]), device=self.device)
+            pred = torch.tensor(np.array([[1.0, 0.0]]), device=self.device)
+        if isinstance(x, np.ndarray):
+            pred = pred.detach().cpu().numpy()
         return pred
 
     def result(self, x, label):
+        if isinstance(x, np.ndarray):
+            var = torch.tensor(x, device=self.device, dtype=torch.float)
+        else:
+            var = x
+
         score = (
-            self.attack.get_score(
-                torch.tensor(x, device=self.device, dtype=torch.float),
-                ret_logits=self.logits,
-            )[:, 1]
+            self.attack.get_score(var, ret_logits=self.logits)[:, 1]
             .squeeze()
             .unsqueeze(0)[0]
-            .detach()
-            .cpu()
-            .numpy()
         )
+        score = score.detach().cpu().numpy()
 
         result = ((score < self.eer).all() and label == 0) or (
             (score >= self.eer).all() and label == 1
