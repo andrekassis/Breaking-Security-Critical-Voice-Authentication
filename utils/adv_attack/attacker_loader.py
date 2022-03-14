@@ -36,15 +36,23 @@ class AttackerWrapper:
         line = random.sample(lines, 1)[0]
         input_path = os.path.join(self.input_dir, "wavs/" + line + ".wav")
         init = sf.read(input_path)[0]
-        return init
+        return np.expand_dims(init[: x.shape[1]], 0)
 
-    def generate(self, x, y, evalu=None, **r_args):
+    def set_ref(self, ref):
+        self.attack.estimator.set_ref(ref)
+
+    def _perpare_shape(self, x):
         if len(x.shape) == 1:
             x = np.expand_dims(x, 0)
-        if self.attack_type != "CM_Attack":
-            self.attack.estimator.set_input_shape((x.shape[1],))
-        else:
-            self.attack.set_input_shape((x.shape[1],))
+        self.attack.estimator.set_input_shape((x.shape[-1],))
+        return x
+
+    def result(self, x, y):
+        x = self._perpare_shape(x)
+        return self.attack.estimator.result(x, y)
+
+    def generate(self, x, y, evalu=None, **r_args):
+        x = self._perpare_shape(x)
 
         if self.attack_type in ("FFT_Attack", "TIME_DOMAIN_ATTACK", "STFT_Attack"):
             return x, self.attack.generate(x, y)
@@ -53,8 +61,7 @@ class AttackerWrapper:
         if self.attack_type in ("carlini", "auto_pgd"):
             return x, self.attack.generate(x, 1 - y)
 
-        init = self._load_example(x, longer=True)[: x.shape[1]]
-        init = np.expand_dims(init, 0)
+        init = self._load_example(x, longer=True)
         return x, self.attack.generate(x, x_adv_init=init)
 
 

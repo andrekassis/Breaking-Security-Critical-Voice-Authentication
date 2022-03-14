@@ -63,7 +63,7 @@ class ADVSR(BaseModel):
         return trans_ivector
 
     def set_ref(self, ref, device):
-        y = torch.tensor(ref, device=device)  # .unsqueeze(0)
+        y = torch.tensor(ref, device=device)
         t_feats = self.get_feats(y)
         self.t_ivector = self._extract_ivector(t_feats)
 
@@ -77,17 +77,16 @@ class ADVSR(BaseModel):
         ret = loss * factor
 
         if aggregate:
-            ret = torch.mean(ret)
+            ret = torch.mean(ret, axis = -1)
 
         return ret
 
-    def get_score(self, x, ret_logits=True, aggregate=True):
+    def get_score(self, x, ret_logits=True):
         score = self.attack_pipeline(
-            x, torch.tensor([1], device=x.device).repeat(x.shape[0]), False
+            x, torch.tensor([1], device=x.device).repeat(x.shape[0]).unsqueeze(-1)
         )
-        output = torch.stack((score, -score), axis=-1)
-        if aggregate:
-            output = torch.mean(output, axis=0).unsqueeze(0)
+        
+        output = torch.stack((score, -score), axis=1)
         if ret_logits:
             return output
         output = F.softmax(output, dim=1)

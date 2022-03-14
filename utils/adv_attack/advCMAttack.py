@@ -65,7 +65,7 @@ class CM_Attack:
         self.k_div = k_div
         self.optim_sat = optim_sat
         self.m, self.p, self.r = 1, 1, 1
-        self.device = est.device
+        self.estimator = est
 
         self.num_layers = 1 if self.first_layer else 0
         self.num_layers += 1 if self.last_layer else 0
@@ -119,18 +119,6 @@ class CM_Attack:
                 raise ValueError("invalid layers provided")
             self.layers_with_args = apply_args_to_layers
 
-    def set_ref(self, ref, device):
-        self.first_layer.estimator.set_ref(ref, device)
-        for l in self.mid_layers.keys():
-            self.mid_layers[l].estimator.set_ref(ref, device)
-        self.last_layer.estimator.set_ref(ref, device)
-
-    def set_input_shape(self, shape):
-        self.first_layer.estimator.set_input_shape(shape)
-        for l in self.mid_layers.keys():
-            self.mid_layers[l].estimator.set_input_shape(shape)
-        self.last_layer.estimator.set_input_shape(shape)
-
     def _mrp(self, k):
         self.m = np.min([k + 1, self.optim_sat])
         self.p = 1 / (k + 1 + self.k_div)
@@ -169,23 +157,21 @@ class CM_Attack:
         return adv
 
     def _log(self, adv, y, evalu=None):
-        if isinstance(adv, np.ndarray):
-            out = out = adv / np.max(np.abs(adv))
-        else:
-            out = (adv / torch.max(torch.abs(adv))).float()
+        if self.verbose < 2:
+            return
 
         with torch.no_grad():
-            if self.verbose == 2:
-                print(
-                    [
-                        evalu[j].result(out, 1 - np.argmax(y, axis=1))[0]
-                        for j in range(len(evalu))
-                    ]
-                )
+            target = 1 - y
+            wb = self.estimator.result(adv, target)
+            if evalu is not None:
+                res = [evalu[j].result(adv, target) for j in range(len(evalu))]
+            else:
+                res = ""
+            print(str(res) + ", wb: " + str(wb))
 
     def generate(self, adv, y, evalu=None, **r_args):
         adv = torch.tensor(
-            adv, requires_grad=True, device=self.device, dtype=torch.float
+            adv, requires_grad=True, device=self.estimator.device, dtype=torch.float
         )
 
         run_args = [
@@ -214,4 +200,4 @@ class CM_Attack:
         self._log(adv, y, evalu)
 
         adv = adv.detach().cpu().numpy()
-        return adv / np.max(np.abs(adv))
+        return adv / np.max(np.abs(adv), axis=-1)

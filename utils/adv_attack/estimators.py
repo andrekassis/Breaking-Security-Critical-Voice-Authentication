@@ -28,7 +28,7 @@ class ESTIMATOR(
         )
         self.attack = getattr(components, system)(**args)
         self.device = device
-        self.eer = np.array(eer)
+        self.eer = eer
         self.logits = logits
 
     def fit(self, x, y, **kwargs) -> None:
@@ -37,9 +37,9 @@ class ESTIMATOR(
     def set_input_shape(self, value):
         setattr(self, "input_shape", value)
 
-    def set_ref(self, x, device):
+    def set_ref(self, x):
         try:
-            self.attack.set_ref(x, device)
+            self.attack.set_ref(x, self.device)
 
         except Exception:
             pass
@@ -92,9 +92,6 @@ class ESTIMATOR(
 
         if isinstance(x, np.ndarray):
             grad = grad.detach().cpu().numpy()
-        # grad[ abs(grad) < np.max(np.abs(grad)) * 0.2] = 0
-        # grad[ abs(grad) < np.max(np.abs(grad)) * 0.3] = 0
-
         return grad
 
     def predict(self, x, logits=None, batch_size=1):
@@ -104,35 +101,46 @@ class ESTIMATOR(
         else:
             var = x
 
-        pred = self.attack.get_score(var, self.logits)
+        pred = self.attack.get_score(var, self.logits)[:, 1].squeeze()
+        if x.shape[0] == 1:
+            pred = pred.unsqueeze(0)
 
         # Find a better aggregation method for ADVJOINT (fixme)
-        if np.prod(pred.shape) > 2:
-            if (np.array([pred[0][1], pred[1][1]]) > self.eer).all():
-                pred = torch.tensor(np.array([[0.0, 1.0]]), device=self.device)
-            pred = torch.tensor(np.array([[1.0, 0.0]]), device=self.device)
+        if len(pred.shape) > 1 and pred.shape[-1] > 1:
+            ret = []
+            for p in pred:
+                if (p > self.eer).all():
+                    ret.append([0.0, 1.0])
+                else:
+                    ret.append([1.0, 0.0])
+            ret = torch.tensor(ret, device=self.device)
         if isinstance(x, np.ndarray):
             pred = pred.detach().cpu().numpy()
         return pred
 
     def result(self, x, label):
+        if label.ndim > 1:
+            label = np.argmax(label, axis=1)
+
         if isinstance(x, np.ndarray):
-            var = torch.tensor(x, device=self.device, dtype=torch.float)
+            out = x / np.max(np.abs(x))
+            var = torch.tensor(out, device=self.device, dtype=torch.float)
         else:
-            var = x
+            var = (x / torch.max(torch.abs(x), axis=-1).values.unsqueeze(-1)).float()
 
-        score = (
-            self.attack.get_score(var, ret_logits=self.logits)[:, 1]
-            .squeeze()
-            .unsqueeze(0)[0]
-        )
+        score = self.attack.get_score(var, ret_logits=self.logits)[:, 1].squeeze(-1)
+
+        if x.shape[0] == 1:
+            score = score.unsqueeze(0)
+
         score = score.detach().cpu().numpy()
+        result = [
+            ((score[i] < self.eer).all() and label == 0)
+            or ((score[i] >= self.eer).all() and label == 1)
+            for i in range(len(score))
+        ]
 
-        result = ((score < self.eer).all() and label == 0) or (
-            (score >= self.eer).all() and label == 1
-        )
-
-        ret = "FAIL"
-        if result == 1:
-            ret = "SUCCESS"
-        return [(ret, str(score) + "|" + str(self.eer))]
+        ret = ["FAIL" if r == 0 else "SUCCESS" for r in result]
+        return [
+            (ret[i], str(score[i]) + "|" + str(self.eer)) for i in range(len(score))
+        ]

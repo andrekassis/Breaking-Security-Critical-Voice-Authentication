@@ -235,6 +235,9 @@ class Pad(torch.nn.Module):
         self.max_len = max_len
         self.device = device
 
+    def set_max_len(self, max_len):
+        self.max_len = max_len
+
     def forward(self, x):
         need_convert = isinstance(x, np.ndarray)
 

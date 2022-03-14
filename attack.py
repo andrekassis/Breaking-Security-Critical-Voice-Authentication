@@ -45,34 +45,42 @@ def trim(audio, silence_threshold=-25.0):
     return np.expand_dims(ret, 0)
 
 
+def get_available_cuda():
+    cmd = (
+        "nvidia-smi | grep -v [\+V] | tail -n+3 |"
+        " sed '/Processes/,$d' | sed 's/ \+/\t/g' |"
+        " cut -f 2,13 | sed 's/N\/A\t//g' |"
+        " sed '$!N;s/\\n/ /' | grep 0\% | cut -c1 | head -1"
+    )
+    device = "cuda:" + popen(cmd).read()
+    return device
+
+
 def load_input(path_label, wav_dir):
     return np.expand_dims(
         sf.read(os.path.join(wav_dir, path_label + ".wav"))[0], 0
     ), np.array([[1, 0]])
 
 
+def calc_succ(evalu, x, y):
+    return np.array(
+        [1 if evalu.result(x, y)[i][0] != "FAIL" else 0 for i in range(x.shape[0])]
+    ).sum()
+
+
 def iter_stats(x, adv, y, sample, exp):
-    orig_res = exp["tester"].attack.estimator.result(x, 1 - np.argmax(y, axis=1))
-    result = exp["tester"].attack.estimator.result(adv, 1 - np.argmax(y, axis=1))
-
+    target = 1 - np.argmax(y, axis=1)
     distance = np.max(np.abs(np.squeeze(adv - x[:, : adv.shape[-1]])))
-    exp["bb_asv"] += np.array(
-        [
-            int(
-                exp["eval_asv"][j].result(adv, 1 - np.argmax(y, axis=1))[0][0] != "FAIL"
-            )
-            for j in range(len(exp["eval_asv"]))
-        ]
+    exp["bb_asv"] += np.array([calc_succ(e, adv, target) for e in exp["eval_asv"]])
+    exp["bb_cm"] += np.array([calc_succ(e, adv, target) for e in exp["eval_cm"]])
+
+    ref = np.expand_dims(
+        sf.read(os.path.join(exp["wav_dir"], sample[-1] + ".wav"))[0], 0
     )
-
-    c_res = [
-        exp["eval_cm"][j].result(adv, 1 - np.argmax(y, axis=1))[0]
-        for j in range(len(exp["eval_cm"]))
-    ]
-    if exp["verbose"]:
-        print(c_res)
-
-    exp["bb_cm"] += np.array([int(c_res[j][0] != "FAIL") for j in range(len(c_res))])
+    exp["Attacker"].set_ref(ref)
+    target = 1 - y
+    orig_res = exp["Attacker"].result(x, target)
+    result = exp["Attacker"].result(adv, target)
 
     to_write = (
         str(sample[0])
@@ -126,9 +134,6 @@ def init_systems(exp, config, device):
         system=config["system"],
         device=device,
     )
-    exp["tester"] = get_attacker(
-        config, attack_type="TIME_DOMAIN_ATTACK", system="ADVJOINT", device=device
-    )
 
     loader, conf_ret = parse_config(
         config["discriminators"], config["target"], system="ADVCM"
@@ -154,7 +159,6 @@ def init(config, device, args):
         "num_samples": config["num_samples"],
         "wav_dir": os.path.join(config["input_dir"], "wavs"),
         "log_interval": config["log_interval"],
-        "verbose": config["verbose"],
         "attack_type": config["attack_type"],
         "system": config["system"],
         "print_iter_out": config["print_iter_out"],
@@ -163,10 +167,8 @@ def init(config, device, args):
         "failed": 0,
         "ctr": 0,
     }
-    if exp["attack_type"] == "CM_attack":
-        exp["r_args"] = config["r_args"]
-    else:
-        exp["r_args"] = {}
+
+    exp["r_args"] = config["r_args"] if exp["attack_type"] == "CM_attack" else {}
 
     try:
         exp["SD"] = SortedDict.fromfile(exp["perf"], Score.reader())
@@ -186,32 +188,27 @@ def init(config, device, args):
     return exp
 
 
-def prepare_iter(sample, exp, device):
+def prepare_iter(sample, exp):
     if exp["system"] != "ADVCM":
         ref = random.sample(sample[1:-1], exp["num_samples"])
         ref = [trim(os.path.join(exp["wav_dir"], r + ".wav")) for r in ref]
-        exp["padder"].max_len = np.min([r.shape[-1] for r in ref])
+        exp["padder"].set_max_len(np.min([r.shape[-1] for r in ref]))
         ref = np.array([exp["padder"](r).squeeze() for r in ref])
-
-        if exp["attack_type"] != "CM_Attack":
-            exp["Attacker"].attack.estimator.set_ref(ref, device)
-        else:
-            exp["Attacker"].attack.set_ref(ref, device)
+        exp["Attacker"].set_ref(ref)
 
     ref = np.expand_dims(
         sf.read(os.path.join(exp["wav_dir"], sample[-1] + ".wav"))[0], 0
     )
-    exp["tester"].attack.estimator.set_ref(ref, device)
 
     for e_asv in exp["eval_asv"]:
-        e_asv.set_ref(ref, device)
+        e_asv.set_ref(ref)
 
     return exp
 
 
-def run_iter(sample, exp, device, **r_args):
+def run_iter(sample, exp, **r_args):
     x, y = load_input(sample[0], exp["wav_dir"])
-    exp = prepare_iter(sample, exp, device)
+    exp = prepare_iter(sample, exp)
     try:
         adv = exp["Attacker"].generate(x, y, evalu=exp["eval_cm"], **r_args)[1]
     # pylint: disable=W0703
@@ -250,7 +247,7 @@ def write_iter(x, adv, exp, sample, to_write):
 def main(config, device, args):
     exp = init(config, device, args)
     for sample in tqdm(exp["inputs"]):
-        x, adv, y, ret = run_iter(sample, exp, device, **exp["r_args"])
+        x, adv, y, ret = run_iter(sample, exp, **exp["r_args"])
         if ret:
             to_write = iter_stats(x, adv, y, sample, exp)
             write_iter(x, adv, exp, sample, to_write)
@@ -260,12 +257,15 @@ def main(config, device, args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--conf")
-    parser.add_argument("--device")
+    parser.add_argument("--device", default="")
 
     arguments = parser.parse_args()
-
+    if arguments.device == "":
+        device = get_available_cuda()
+    else:
+        device = arguments.device
     with open(arguments.conf, encoding="utf8") as f:
         conf_map = yaml.load(f, Loader=yaml.Loader)
 
     setup_seed(1234)
-    main(conf_map, arguments.device, arguments)
+    main(conf_map, device, arguments)

@@ -69,9 +69,7 @@ class PLDA(object):
         variance = 1.0 + self.psi / (num_examples * self.psi + 1.0)
 
         logdet = torch.sum(torch.log(variance))
-
-        sqdiff = torch.pow(trans_testivector - mean, 2)
-
+        sqdiff = torch.pow(trans_testivector.unsqueeze(1) - mean, 2)
         variance = 1.0 / variance
 
         loglike_given_class = -0.5 * (
@@ -80,8 +78,7 @@ class PLDA(object):
             + torch.matmul(sqdiff, variance)
         )
 
-        # work out loglike_without_class
-        sqdiff = torch.pow(trans_testivector, 2)
+        sqdiff = torch.pow(trans_testivector.unsqueeze(1), 2)
         variance = self.psi + 1.0
         logdet = torch.sum(torch.log(variance))
         variance = 1.0 / variance
@@ -91,6 +88,5 @@ class PLDA(object):
             + torch.log(2 * torch.tensor(3.1415926, device=self.device)) * self.dim
             + torch.matmul(sqdiff, variance)
         )
-
         loglike_ratio = loglike_given_class - loglike_without_class
         return loglike_ratio

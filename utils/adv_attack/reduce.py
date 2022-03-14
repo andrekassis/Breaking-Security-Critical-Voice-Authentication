@@ -157,7 +157,6 @@ class SpectralGate(ABC):
             padded, p, n_std_thresh_stationary=n_std_thresh_stationary
         )
         ret = filtered_padded_chunk[:, self.padding : x.shape[-1] + self.padding]
-        # ret = ret / torch.max(torch.abs(ret))
 
         if rev:
             return ret.cpu().numpy()
