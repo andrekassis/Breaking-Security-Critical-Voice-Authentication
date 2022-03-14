@@ -44,3 +44,17 @@ class SVsystem(object):
     def ComputePLDAScore(self, enrollivector, testivector):
         score = self.plda.ComputeScores(enrollivector, 1, testivector)
         return score
+
+    def __call__(self, sample, eval=True):
+        enroll, test = sample
+
+        e_v = self.Getivector(enroll)
+        t_v = self.Getivector(test)
+        loss = self.ComputePLDAScore(e_v, t_v)
+        return torch.stack((-loss, loss), axis=-1).squeeze(-2)
+
+    def eval(self):
+        return
+
+    def to(self, device):
+        return

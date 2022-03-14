@@ -13,9 +13,9 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data.dataloader import DataLoader
 
-from util.generic.setup import setup_seed
+from utils.generic.setup import setup_seed
 from utils.train import schedulers
-from utils.audio.data import ASVDataset, SamplerBlockShuffleByLen, customize_collate
+from utils.audio.data import CMDataset, SamplerBlockShuffleByLen, customize_collate
 from utils.eval.eer_tools import cal_roc_eer
 from utils.eval.model_loaders import load_cm_asvspoof
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
     else:
         final_layer = lambda x: x
 
-    train_set = ASVDataset(protocol_file_path, data_path, extractor, flip_label)
+    train_set = CMDataset(protocol_file_path, data_path, extractor, flip_label, device1)
     if config["training_parameters"]["sampler"] == "block_shuffle_by_length":
         with open(
             config["training_parameters"]["lens_file"], "r", encoding="utf8"
@@ -237,9 +237,16 @@ if __name__ == "__main__":
         )
         data_params["collate_fn"] = customize_collate
         data_params["shuffle"] = False
+
+    try:
+        if device1 != "cpu" and data_params["num_workers"] > 0:
+            data_params["multiprocessing_context"] = "spawn"
+    except:
+        pass
+
     train_loader = DataLoader(train_set, **data_params)
 
-    val_set = ASVDataset(protocol_file_path, data_path, extractor, flip_label)
+    val_set = CMDataset(protocol_file_path, data_path, extractor, flip_label, device1)
     data_params["shuffle"] = False
     val_loader = DataLoader(val_set, **data_params)
 

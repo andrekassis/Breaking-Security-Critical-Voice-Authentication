@@ -103,18 +103,20 @@ class SamplerBlockShuffleByLen(torch_sampler.Sampler):
         return len(self.m_idx)
 
 
-class ASVDataset(Dataset):
-    def __init__(self, protocol, path_data, extractor, flip_label):
+class CMDataset(Dataset):
+    def __init__(self, protocol, path_data, extractor, flip_label, device):
         super().__init__()
         with open(protocol, "r", encoding="utf8") as f:
             self.protocol = [line.strip().split(" ") for line in f]
             self.data_path = path_data
         self.extractor = extractor
+        self.device = device
+        self.flip = flip_label
 
-        if flip_label:
-            self._label = lambda x: 1 - x
-        else:
-            self._label = lambda x: x
+    def _label(self, x):
+        if self.flip:
+            return 1 - x
+        return x
 
     def __len__(self):
         return len(self.protocol)
@@ -127,8 +129,49 @@ class ASVDataset(Dataset):
             sf.read(os.path.join(self.data_path, self.protocol[index][0] + ".wav"))[0],
             0,
         )
-        test_sample = torch.tensor(test_sample, dtype=torch.float)
+        test_sample = torch.tensor(test_sample, dtype=torch.float, device=self.device)
         with torch.no_grad():
-            test_sample = self.extractor(test_sample).squeeze(1)
+            test_sample = self.extractor(test_sample).squeeze(1).cpu()
         test_label = self._label(torch.tensor(int(self.protocol[index][1])))
+        return test_sample, test_label
+
+
+class ASVDataset(Dataset):
+    def __init__(self, protocol, path_data, extractor, flip_label, device):
+        super().__init__()
+        with open(protocol, "r", encoding="utf8") as f:
+            self.protocol = [line.strip().split(" ") for line in f]
+            self.data_path = path_data
+        self.extractor = extractor
+        self.device = device
+        self.flip = flip_label
+
+    def _label(self, x):
+        if self.flip:
+            return 1 - x
+        return x
+
+    def __len__(self):
+        return len(self.protocol)
+
+    def len(self):
+        return self.__len__()
+
+    def __getitem__(self, index):
+        enroll = os.path.join(self.data_path, self.protocol[index][-1])
+        test = os.path.join(self.data_path, self.protocol[index][-2])
+        label = self.protocol[index][0]
+
+        enroll = np.expand_dims(sf.read(enroll)[0], 0)
+        test = np.expand_dims(sf.read(test)[0], 0)
+
+        enroll = torch.tensor(enroll, dtype=torch.float, device=self.device)
+        test = torch.tensor(test, dtype=torch.float, device=self.device)
+
+        with torch.no_grad():
+            enroll = self.extractor(enroll)
+            test = self.extractor(test)
+
+        test_sample = [enroll.squeeze().cpu(), test.squeeze().cpu()]
+        test_label = self._label(torch.tensor(int(label)))
         return test_sample, test_label

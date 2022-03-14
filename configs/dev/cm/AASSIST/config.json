@@ -40,6 +40,7 @@
 		"num_epochs": 100,
 		"data_loader": {
 			"batch_size": 24,
+			"num_workers": 48,
 			"shuffle": true
 		},
 		"optimizer": {

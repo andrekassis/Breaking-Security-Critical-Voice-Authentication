@@ -1,12 +1,22 @@
 import os
 import argparse
 import torch
+from pathlib import Path
+import json
+from collections import OrderedDict
 import torch.nn.functional as F
 from tqdm import tqdm
 from torch.utils.data.dataloader import DataLoader
-from utils.audio.data import ASVDataset
+from utils.audio.data import ASVDataset, CMDataset
 from utils.eval.eer_tools import cal_roc_eer
-from utils.eval.model_loaders import load_cm_asvspoof
+from utils.eval.model_loaders import load_cm_asvspoof, load_asv_plda
+
+
+def to(vec, device):
+    if isinstance(vec, list):
+        return [v.to(device) for v in vec]
+    else:
+        return vec.to(device)
 
 
 def asv_cal_accuracies(
@@ -17,7 +27,7 @@ def asv_cal_accuracies(
         probs = torch.empty(0, 3).to(device)
         for test_batch in tqdm(test_loader):
             test_sample, test_label = test_batch
-            test_sample = test_sample.to(device)
+            test_sample = to(test_sample, device)
             test_label = test_label.to(device)
             infer = net(test_sample, eval=True)
             t1 = transform(final_layer(infer))
@@ -40,8 +50,16 @@ if __name__ == "__main__":
     protocol_file_path = os.path.join(os.path.join(args.base, "labels"), "eval.lab")
     data_path = os.path.join(args.base, "wavs/")
 
-    _, _, logits, model_dict = load_cm_asvspoof(args.config, device)
-    _, _, _, model_dict1 = load_cm_asvspoof(args.config, test_device)
+    with Path(args.config).open("rt", encoding="utf8") as handle:
+        config = json.load(handle, object_hook=OrderedDict)
+
+    if config["system"] == "ADVSR":
+        loader = load_asv_plda
+    else:
+        loader = load_cm_asvspoof
+
+    _, _, logits, model_dict = loader(args.config, device)
+    _, _, _, model_dict1 = loader(args.config, test_device)
     Net = model_dict1["model"]
     extractor = model_dict["extractor"]
     flip_label = model_dict["flip_label"]
@@ -60,14 +78,25 @@ if __name__ == "__main__":
     else:
         final_layer = lambda x: x
 
-    test_set = ASVDataset(protocol_file_path, data_path, extractor, flip_label)
-    test_loader = DataLoader(
-        test_set,
-        batch_size=args.bs,
-        shuffle=False,
-        num_workers=args.bs * 2,
-        pin_memory=True,
-    )
+    if config["system"] == "ADVSR":
+        test_set = ASVDataset(
+            protocol_file_path, data_path, extractor, flip_label, device
+        )
+    else:
+        test_set = CMDataset(
+            protocol_file_path, data_path, extractor, flip_label, device
+        )
+
+    loader_args = {
+        "batch_size": args.bs,
+        "shuffle": False,
+        "num_workers": args.bs * 2,
+        "pin_memory": True,
+    }
+    if device != "cpu":
+        loader_args["multiprocessing_context"] = "spawn"
+
+    test_loader = DataLoader(test_set, **loader_args)
 
     probabilities = asv_cal_accuracies(
         test_loader,
