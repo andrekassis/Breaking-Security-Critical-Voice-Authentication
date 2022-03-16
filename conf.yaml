@@ -2,18 +2,18 @@ inputs: inputs/attack_inputs.txt
 input_dir: "asvspoofWavs"
 lengths: inputs/lengths
 
+seed: 0000 #1234
 sr: 16000
 length: 16000
 system: ADVSR
 attack_type: CM_Attack
-num_samples: 10
+num_samples:  10 #10
 
 log_interval: 1
 perf_log: perf.txt
-verbose: False #True
 print_iter_out: True
-write_wavs: True
-write_plots: True
+write_wavs: False #True
+write_plots: False #True
 
 shadow:
     cm: "dev"
@@ -40,13 +40,14 @@ discriminator_wb:
 discriminators:
     args:
         cm: #ignored for ADVSR
-            selector: [rawGAT_st, RawDarts, Res2Net, AASSIST, AASSIST-L] #[SSNet, lcnnFull, rawGAT_st, mcg, mlcg, Res2Net, AIR, darts, comparative, RawDarts, AASSIST, AASSIST-L, AIR_AM] 
+            selector: [SSNet, lcnnFull, rawGAT_st, mcg, mlcg, Res2Net, AIR, darts, comparative, RawDarts, AASSIST, AASSIST-L, AIR_AM] #[rawGAT_st, RawDarts, Res2Net, AASSIST, AASSIST-L] #[SSNet, lcnnFull, rawGAT_st, mcg, mlcg, Res2Net, AIR, darts, comparative, RawDarts, AASSIST, AASSIST-L, AIR_AM] 
         asv: #ignored for ADVCM
             selector: [mfcc] #one of [mfcc, lps, xvec]
 
 TIME_DOMAIN_ATTACK:
     epsilon: 0.001 #0.001 
     max_iter: 30
+    norm: null
 
 FFT_Attack:
     epsilon: 0.015
@@ -54,6 +55,7 @@ FFT_Attack:
     factor: null
     thresh: null
     sr: null
+    norm: null
 
 STFT_Attack:
     epsilon: 0.0005 #0.05
@@ -65,6 +67,7 @@ STFT_Attack:
     factor: null
     thresh: null
     sr: null
+    norm: null
 
 auto_pgd:
     #norm: 2
@@ -108,30 +111,33 @@ CM_Attack:
     first_layer:
         type: "TIME_DOMAIN_ATTACK"
         args:  
-            epsilon: 0.005
-            max_iter: 30
-            delta: 0
+            epsilon: 0.005 #0.003 #0.002 #1
+            max_iter: 30 #100 #30
+            delta: null #0 #null #0
+            norm: null #'fro'
     
     last_layer:
         type: "TIME_DOMAIN_ATTACK"
         args:  
-            epsilon: 0.002 #0.0002
-            max_iter: 30
-            delta: 0
+            epsilon: 0.0015 #0.002 #0.0015 #0.0002
+            max_iter: 30 #100 #30
+            delta: null 
+            norm: null #'fro'
         
     mid_layers: [
                  {'type': 'STFT_Attack',
                   'args': { 
-                           epsilon: 0.0003,
+                           epsilon: 0.0003, #0.0004, #0.0003,
                            delta: 0,
                            nfft: 512,
                            window: 'kaiser_window', 
                            hop_length: 256, 
                            win_length: 512, 
                            max_iter: 1,
-                           factor: 0.25,
+                           factor: 0.25, #0.0858, #0.25,
                            thresh: 2500,
-                           sr: 16000
+                           sr: 16000,
+                           norm: null #'fro'
                           }
                  },
                  {'type': 'FFT_Attack',
@@ -141,7 +147,8 @@ CM_Attack:
                            max_iter: 1,
                            factor: 0.25,
                            thresh: 2500,
-                           sr: 16000
+                           sr: 16000,
+                           norm: null #'fro'
                           }
                  }
                 ]
@@ -150,23 +157,23 @@ CM_Attack:
         STFT_Attack: 1
         FFT_Attack: 1
     powers:
-        STFT_Attack: 0.9
+        STFT_Attack: 0.85 #0.9
         FFT_Attack: 1.2
     r_c:
         stationary: true
-        win: 'blackman_window' #null #'', #'blackman_window'
-        n_fft: 1024
-        hop_length: 256
-        win_length: 1024
+        win: 'blackman_window' #'blackman_window' #'hann_window' #'hann_window' #'hann_window' # 'bartlett_window' #'hann_window' #'blackman_window' #null
+        n_fft: 512
+        hop_length: 64 #96 #64 #96
+        win_length: 512
         freq_mask_smooth_hz: 500
-        time_mask_smooth_ms: 50
-        padding: 0
-    stop_reduce: null #20 #10
-    r_div: 3
-    k_div: 0.2 #0.1
+        time_mask_smooth_ms: 60 #40 #50
+        padding: 30000
+    stop_reduce: 25 # 20 #15 
+    r_div: 2.8
+    k_div: 0.1
     optim_sat: 15
-    stationary: false #true
-    apply_args_to_layers: all #all_but_last
+    stationary: true
+    apply_args_to_layers: mid_layers #all #all_but_last #mid_layers #all #all_but_last
     verbose: 2
 
 r_args:

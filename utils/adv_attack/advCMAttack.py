@@ -122,7 +122,7 @@ class CM_Attack:
     def _mrp(self, k):
         self.m = np.min([k + 1, self.optim_sat])
         self.p = 1 / (k + 1 + self.k_div)
-        self.r = (1 / (1 - self.p) - 1) / self.r_div + 1
+        self.r = (1 / (1 - self.p) - 1) / self.r_div + 1 if self.r_div else 1
 
     def _configure_attacks(self, k):
         self._mrp(k)
@@ -178,6 +178,8 @@ class CM_Attack:
             r_args if l in self.layers_with_args else {} for l in range(self.num_layers)
         ]
         start_mid, end_mid = self._get_idx_of_mid_layers()
+
+        self._log(adv, y, evalu)
 
         if self.first_layer:
             adv = self.first_layer.generate(adv, y, **run_args[0])

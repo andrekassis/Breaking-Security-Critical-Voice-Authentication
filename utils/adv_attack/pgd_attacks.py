@@ -8,15 +8,18 @@ from .reduce import sp
 
 class PGD(ABC):
     # pylint: disable=R0902
-    def __init__(self, estimator, epsilon, max_iter, dtype, delta=None, r_c=None):
+    def __init__(
+        self, estimator, epsilon, max_iter, dtype, delta=None, r_c=None, norm=None
+    ):
         self.estimator = estimator
         self.epsilon = epsilon
         self.max_iter = max_iter
-        self.type = dtype
+        self.dtype = dtype
         self.delta = delta
         self.alpha = None
         self.eps = None
         self.length = None
+        self.norm = norm
 
         if r_c is not None:
             self.sg = sp(**r_c)
@@ -118,8 +121,12 @@ class PGD(ABC):
         # pylint: disable=W0612
         for t in range(self.max_iter):
             gradient = self._gradient(X_F + delta, y, **r_args)
-            delta = delta - alpha * self._sgn(gradient)
-            delta = self._clip(self._project(delta))
+            if self.norm == "fro":
+                delta = gradient
+                delta = self._clip(self._project(delta))
+            else:
+                delta = delta - alpha * self._sgn(gradient)
+                delta = self._clip(self._project(delta))
             delta = self._clip_to_wav_range(X_F + delta) - X_F
         # pylint: enable=W0612
 
@@ -138,8 +145,8 @@ class PGD(ABC):
 
 
 class TIME_DOMAIN_ATTACK(PGD):
-    def __init__(self, estimator, epsilon, max_iter, delta=None, r_c=None):
-        super().__init__(estimator, epsilon, max_iter, np.float64, delta, r_c)
+    def __init__(self, estimator, epsilon, max_iter, delta=None, r_c=None, norm=None):
+        super().__init__(estimator, epsilon, max_iter, np.float64, delta, r_c, norm)
 
     def _transform(self, x, requires_grad=True):
         return x
@@ -151,6 +158,10 @@ class TIME_DOMAIN_ATTACK(PGD):
         return delta
 
     def _clip(self, x):
+        if self.norm == "fro":
+            if isinstance(x, np.ndarray):
+                return x / np.linalg.norm(x) * self.epsilon
+            return x / torch.norm(x) * self.epsilon
         return x.clip(-self.epsilon, self.epsilon)
 
     @staticmethod
@@ -171,8 +182,9 @@ class Spectral_Attack(PGD):
         factor=0.25,
         thresh=2500,
         sr=16000,
+        norm=None,
     ):
-        super().__init__(estimator, epsilon, max_iter, np.complex128, delta, r_c)
+        super().__init__(estimator, epsilon, max_iter, np.complex128, delta, r_c, norm)
 
         self.factor = factor
         self.thresh = thresh
@@ -212,6 +224,8 @@ class Spectral_Attack(PGD):
         return self._clip_torch(x)
 
     def _clip_torch(self, x):
+        if self.norm == "fro":
+            return x / torch.norm(x) * self.epsilon
         sgn = torch.sign(x.real) + 1j * torch.sign(x.imag)
         mag = (
             torch.minimum(torch.abs(x.real), torch.abs(self.eps * self.epsilon))
@@ -221,6 +235,8 @@ class Spectral_Attack(PGD):
         return ret
 
     def _clip_np(self, x):
+        if self.norm == "fro":
+            return x / np.linalg.norm(x) * self.epsilon
         sgn = np.sign(x.real) + 1j * np.sign(x.imag)
         mag = (
             np.minimum(np.abs(x.real), np.abs(self.eps * self.epsilon))
@@ -266,8 +282,11 @@ class STFT_Attack(Spectral_Attack):
         factor=0.25,
         thresh=2500,
         sr=16000,
+        norm=None,
     ):
-        super().__init__(estimator, epsilon, max_iter, delta, r_c, factor, thresh, sr)
+        super().__init__(
+            estimator, epsilon, max_iter, delta, r_c, factor, thresh, sr, norm
+        )
         self.nfft = nfft
         self.win_length = win_length
         if self.win_length is None:
@@ -338,8 +357,11 @@ class FFT_Attack(Spectral_Attack):
         factor=0.25,
         thresh=2500,
         sr=16000,
+        norm=None,
     ):
-        super().__init__(estimator, epsilon, max_iter, delta, r_c, factor, thresh, sr)
+        super().__init__(
+            estimator, epsilon, max_iter, delta, r_c, factor, thresh, sr, norm
+        )
 
     def _transform(self, x, requires_grad=True):
         if requires_grad is False and not isinstance(x, np.ndarray):

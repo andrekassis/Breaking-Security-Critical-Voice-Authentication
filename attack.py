@@ -38,6 +38,7 @@ strip_silence: AudioSegment = lambda x, threshold: trim_trailing(
 
 
 def trim(audio, silence_threshold=-25.0):
+    # return np.expand_dims(sf.read(audio)[0], 0)
     sound = AudioSegment.from_file(audio)
     stripped = strip_silence(sound, silence_threshold)
     ret = np.array(stripped.get_array_of_samples())
@@ -267,5 +268,5 @@ if __name__ == "__main__":
     with open(arguments.conf, encoding="utf8") as f:
         conf_map = yaml.load(f, Loader=yaml.Loader)
 
-    setup_seed(1234)
+    setup_seed(conf_map["seed"])
     main(conf_map, device, arguments)
