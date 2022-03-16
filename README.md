@@ -34,4 +34,5 @@ python attack.py --conf conf.yaml --device "cuda:0"
 Explain how to train, test and attack any custom model. 
 
 Explain how to change attack type and hyperparameters using the configuration file
+
 Add link to sample adversarial examples
