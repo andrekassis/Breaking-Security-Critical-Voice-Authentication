@@ -7,8 +7,8 @@ sr: 16000
 length: 16000
 system: ADVSR
 attack_type: CM_Attack
-num_samples:  10 #10
-
+num_samples:  10
+silence_threshold: "-35.0" #"-20.0" #-25.0
 log_interval: 1
 perf_log: perf.txt
 print_iter_out: True
@@ -111,30 +111,30 @@ CM_Attack:
     first_layer:
         type: "TIME_DOMAIN_ATTACK"
         args:  
-            epsilon: 0.005 #0.003 #0.002 #1
-            max_iter: 30 #100 #30
-            delta: null #0 #null #0
+            epsilon: 0.005 
+            max_iter: 30
+            delta: 0 #null #0
             norm: null #'fro'
     
     last_layer:
         type: "TIME_DOMAIN_ATTACK"
         args:  
-            epsilon: 0.0015 #0.002 #0.0015 #0.0002
-            max_iter: 30 #100 #30
+            epsilon: 0.0015 #0.002 
+            max_iter: 30
             delta: null 
             norm: null #'fro'
         
     mid_layers: [
                  {'type': 'STFT_Attack',
                   'args': { 
-                           epsilon: 0.0003, #0.0004, #0.0003,
+                           epsilon: 0.0004, #0.0003, 
                            delta: 0,
                            nfft: 512,
                            window: 'kaiser_window', 
                            hop_length: 256, 
                            win_length: 512, 
                            max_iter: 1,
-                           factor: 0.25, #0.0858, #0.25,
+                           factor: 0.25, 
                            thresh: 2500,
                            sr: 16000,
                            norm: null #'fro'
@@ -145,7 +145,7 @@ CM_Attack:
                            epsilon: 0.2,
                            delta: 0,
                            max_iter: 1,
-                           factor: 0.25,
+                           factor: 0.25, 
                            thresh: 2500,
                            sr: 16000,
                            norm: null #'fro'
@@ -157,24 +157,26 @@ CM_Attack:
         STFT_Attack: 1
         FFT_Attack: 1
     powers:
-        STFT_Attack: 0.85 #0.9
-        FFT_Attack: 1.2
+        STFT_Attack: 0.9 
+        FFT_Attack: 1.2 
     r_c:
         stationary: true
-        win: 'blackman_window' #'blackman_window' #'hann_window' #'hann_window' #'hann_window' # 'bartlett_window' #'hann_window' #'blackman_window' #null
+        win: 'kaiser_window' #'blackman_window'
         n_fft: 512
-        hop_length: 64 #96 #64 #96
+        hop_length: 96 #48 #64
         win_length: 512
         freq_mask_smooth_hz: 500
-        time_mask_smooth_ms: 60 #40 #50
+        time_mask_smooth_ms: 60
         padding: 30000
-    stop_reduce: 25 # 20 #15 
-    r_div: 2.8
-    k_div: 0.1
+    stop_reduce: 20 
+    r_div: 3.5
+    k_div: 1.2 # best: 1.1*stacks - 1
+    stacks: 2
+    interval: 1
     optim_sat: 15
     stationary: true
-    apply_args_to_layers: mid_layers #all #all_but_last #mid_layers #all #all_but_last
-    verbose: 2
+    apply_args_to_layers: all #all_but_last #all_but_first
+    verbose: 1 #2
 
 r_args:
     p: 1

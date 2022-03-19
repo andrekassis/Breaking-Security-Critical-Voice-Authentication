@@ -165,6 +165,7 @@ def init(config, device, args):
         "print_iter_out": config["print_iter_out"],
         "write_wavs": config["write_wavs"],
         "write_plots": config["write_plots"],
+        "silence_threshold": float(config["silence_threshold"]),
         "failed": 0,
         "ctr": 0,
     }
@@ -192,7 +193,13 @@ def init(config, device, args):
 def prepare_iter(sample, exp):
     if exp["system"] != "ADVCM":
         ref = random.sample(sample[1:-1], exp["num_samples"])
-        ref = [trim(os.path.join(exp["wav_dir"], r + ".wav")) for r in ref]
+        ref = [
+            trim(
+                os.path.join(exp["wav_dir"], r + ".wav"),
+                silence_threshold=exp["silence_threshold"],
+            )
+            for r in ref
+        ]
         exp["padder"].set_max_len(np.min([r.shape[-1] for r in ref]))
         ref = np.array([exp["padder"](r).squeeze() for r in ref])
         exp["Attacker"].set_ref(ref)

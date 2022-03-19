@@ -24,6 +24,8 @@ class CM_Attack:
         r_div=3,
         k_div=0.1,
         optim_sat=15,
+        interval=1,
+        stacks=2,
         stationary=False,
         apply_args_to_layers="all_but_last",
         verbose=0,
@@ -66,12 +68,17 @@ class CM_Attack:
         self.optim_sat = optim_sat
         self.m, self.p, self.r = 1, 1, 1
         self.estimator = est
+        self.interval = interval
+        self.num_stacks = stacks
 
         self.num_layers = 1 if self.first_layer else 0
         self.num_layers += 1 if self.last_layer else 0
         self.num_layers += len(self.mid_layers_conf) if self.mid_layers_conf else 0
 
         self._set_layers_with_args(apply_args_to_layers)
+
+        r_c["stationary"] = False
+        self.sp2 = sp(**r_c)
 
     def _get_idx_of_mid_layers(self):
         start_mid = 1 if self.first_layer else 0
@@ -120,9 +127,22 @@ class CM_Attack:
             self.layers_with_args = apply_args_to_layers
 
     def _mrp(self, k):
-        self.m = np.min([k + 1, self.optim_sat])
-        self.p = 1 / (k + 1 + self.k_div)
-        self.r = (1 / (1 - self.p) - 1) / self.r_div + 1 if self.r_div else 1
+        k_curr = k // self.interval
+        self.m = np.min([k_curr + 1, self.optim_sat])
+        p = 1 / (k + 1 + self.k_div)
+
+        ##working
+        self.p = p  # / self.num_stacks
+        self.r = (
+            (1 / (1 - p * self.num_stacks) - 1) / self.r_div + 1 if self.r_div else 1
+        )
+        ##
+
+        ##test##
+        # self.p = p / self.num_stacks
+        # p = 1 / (k + 1 + self.k_div+1.1)
+        # self.r = (1 / (1 - p*2) - 1) / self.r_div + 1 if self.r_div else 1
+        ##
 
     def _configure_attacks(self, k):
         self._mrp(k)
@@ -136,24 +156,17 @@ class CM_Attack:
             self.mid_layers[m["type"]].delta = m["args"]["delta"]
             self.mid_layers[m["type"]].max_iter = m["args"]["max_iter"]
 
-    def _reduce_noise(self, adv, k):
-        if k < self.stop_reduce:
-            return (self.spectral_gate(adv, p=self.p) * self.r).clip(-1, 1)
-        if k == self.stop_reduce:
-            return (self.spectral_gate(adv, p=self.p) * self.r).clip(-0.95, 0.95)
+    def _clip(self, adv, k):
+        with torch.no_grad():
+            adv = (adv * self.r).clip(-1, 1) if k < self.stop_reduce else adv
+            adv = (adv * self.r).clip(-95, 95) if k == self.stop_reduce else adv
         return adv
 
-    def _first_pass(self, adv, y, r_args):
+    def _run_layers(self, adv, y, k, r_args):
         for i, m in enumerate(self.mid_layers_conf):
             adv = self.mid_layers[m["type"]].generate(adv, y, **r_args[i])
-        return adv
-
-    def _second_pass(self, adv, y, r_args):
-        r_args.reverse()
-        self.mid_layers_conf.reverse()
-        adv = self._first_pass(adv, y, r_args)
-        self.mid_layers_conf.reverse()
-        r_args.reverse()
+        with torch.no_grad():
+            adv = self.spectral_gate(adv, p=self.p) if k <= self.stop_reduce else adv
         return adv
 
     def _log(self, adv, y, evalu=None):
@@ -169,35 +182,45 @@ class CM_Attack:
                 res = ""
             print(str(res) + ", wb: " + str(wb))
 
-    def generate(self, adv, y, evalu=None, **r_args):
-        adv = torch.tensor(
-            adv, requires_grad=True, device=self.estimator.device, dtype=torch.float
-        )
-
+    def get_r_args(self, **r_args):
         run_args = [
             r_args if l in self.layers_with_args else {} for l in range(self.num_layers)
         ]
         start_mid, end_mid = self._get_idx_of_mid_layers()
+        return run_args, start_mid, end_mid
+
+    def _run_edge_layer(self, adv, y, idx, run_args):
+        if idx != 0 and idx != -1:
+            return adv
+        if idx == 0 and self.first_layer:
+            return self.first_layer.generate(adv, y, **run_args[0])
+        if idx == -1 and self.last_layer:
+            return self.last_layer.generate(adv, y, **run_args[-1])
+        return adv
+
+    def generate(self, adv, y, evalu=None, **r_args):
+        adv = torch.tensor(
+            adv, requires_grad=True, device=self.estimator.device, dtype=torch.float
+        )
+        run_args, start_mid, end_mid = self.get_r_args(**r_args)
 
         self._log(adv, y, evalu)
 
-        if self.first_layer:
-            adv = self.first_layer.generate(adv, y, **run_args[0])
+        adv = self._run_edge_layer(adv, y, 0, run_args)
 
         self._log(adv, y, evalu)
 
         for k in tqdm(range(self.itrs), disable=self.verbose == 0):
             self._configure_attacks(k)
 
-            adv = self._first_pass(adv, y, run_args[start_mid:end_mid])
-            with torch.no_grad():
-                adv = self._reduce_noise(adv, k)
-            adv = self._second_pass(adv, y, run_args[start_mid:end_mid])
+            for stack in range(self.num_stacks):
+                adv = self._run_layers(adv, y, k, run_args[start_mid:end_mid])
+
+            adv = self._clip(adv, k)
 
             self._log(adv, y, evalu)
 
-        if self.last_layer:
-            adv = self.last_layer.generate(adv, y, **run_args[-1])
+        adv = self._run_edge_layer(adv, y, -1, run_args)
 
         self._log(adv, y, evalu)
 

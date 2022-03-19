@@ -1,5 +1,6 @@
 # pylint: disable=E1102, E1111
 from abc import ABC
+import random
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -36,15 +37,22 @@ class SpectralGate(ABC):
         else:
             self._hop_length = hop_length
 
-        win_args = {
+        self.win_args = {
             "window_length": self._win_length,
             "device": self.device,
             "requires_grad": False,
         }
-        if win is not None:
-            self.win = getattr(torch, win)(**win_args)
+
+        if win == "random":
+            self.win = "random"
+            self.last_win = None
+        elif win is not None:
+            self.win = getattr(torch, win)(**self.win_args)
+            self.last_win = self.win
         else:
             self.win = None
+            self.last_win = None
+
         self._time_constant_s = time_constant_s
         self._generate_mask_smoothing_filter(freq_mask_smooth_hz, time_mask_smooth_ms)
 
@@ -82,12 +90,28 @@ class SpectralGate(ABC):
             self._smoothing_filter = self._filter(n_grad_freq, n_grad_time)
 
     def _stft(self, x):
+        if self.win == "random":
+            win = getattr(
+                torch,
+                random.sample(
+                    [
+                        "hann_window",
+                        "blackman_window",
+                        "hamming_window",
+                        "kaiser_window",
+                    ],
+                    1,
+                )[0],
+            )(**self.win_args)
+            self.last_win = win
+        else:
+            win = self.win
         return torch.stft(
             x,
             n_fft=self._n_fft,
             hop_length=self._hop_length,
             win_length=self._win_length,
-            window=self.win,
+            window=win,
             center=True,
             pad_mode="reflect",
             normalized=False,
@@ -101,7 +125,7 @@ class SpectralGate(ABC):
             n_fft=self._n_fft,
             hop_length=self._hop_length,
             win_length=self._win_length,
-            window=self.win,
+            window=self.last_win,
             center=True,
             length=self.length + self.padding * 2,
             normalized=False,
