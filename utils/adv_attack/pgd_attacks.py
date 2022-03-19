@@ -46,9 +46,6 @@ class PGD(ABC):
     def _sgn(x):
         pass
 
-    def _clip_to_wav_range(self, x):
-        return self._transform(self._inverse_transform(x).clip(-1, 1))
-
     def _clip(self, x):
         pass
 
@@ -127,10 +124,14 @@ class PGD(ABC):
             else:
                 delta = delta - alpha * self._sgn(gradient)
                 delta = self._clip(self._project(delta))
-            delta = self._clip_to_wav_range(X_F + delta) - X_F
         # pylint: enable=W0612
 
         X_r = self._inverse_transform(X_F + delta, requires_grad=False)
+        X_r = (
+            X_r / np.max(np.abs(X_r))
+            if isinstance(X_r, np.ndarray)
+            else X_r / torch.max(torch.abs(X_r))
+        )
         delt = X_r[:, : X.shape[-1]] - X[:, : X_r.shape[-1]]
         return delt
 

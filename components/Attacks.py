@@ -77,7 +77,7 @@ class ADVSR(BaseModel):
         ret = loss * factor
 
         if aggregate:
-            ret = torch.mean(ret, axis = -1)
+            ret = torch.mean(ret, axis=-1)
 
         return ret
 
@@ -85,7 +85,7 @@ class ADVSR(BaseModel):
         score = self.attack_pipeline(
             x, torch.tensor([1], device=x.device).repeat(x.shape[0]).unsqueeze(-1)
         )
-        
+
         output = torch.stack((score, -score), axis=1)
         if ret_logits:
             return output
