@@ -130,7 +130,7 @@ class PGD(ABC):
         X_r = (
             X_r / np.max(np.abs(X_r))
             if isinstance(X_r, np.ndarray)
-            else X_r / torch.max(torch.abs(X_r))
+            else X_r / torch.max(torch.abs(X_r), -1).values
         )
         delt = X_r[:, : X.shape[-1]] - X[:, : X_r.shape[-1]]
         return delt
@@ -142,6 +142,11 @@ class PGD(ABC):
         delta = self._itr(x, y, **r_args)
 
         ret = x[:, : delta.shape[-1]] + delta
+        ret = (
+            ret / np.max(np.abs(ret))
+            if isinstance(ret, np.ndarray)
+            else ret / torch.max(torch.abs(ret), -1).values
+        )
         return ret
 
 

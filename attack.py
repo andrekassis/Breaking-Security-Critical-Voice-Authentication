@@ -57,10 +57,9 @@ def get_available_cuda():
     return device
 
 
-def load_input(path_label, wav_dir):
-    return np.expand_dims(
-        sf.read(os.path.join(wav_dir, path_label + ".wav"))[0], 0
-    ), np.array([[1, 0]])
+def load_input(path_label, wav_dir, length):
+    inp = np.expand_dims(sf.read(os.path.join(wav_dir, path_label + ".wav"))[0], 0)
+    return inp[:, :length], np.array([[1, 0]])
 
 
 def calc_succ(evalu, x, y):
@@ -156,7 +155,7 @@ def init(config, device, args):
     exp = {
         "sr": config["sr"],
         "perf": config["perf_log"],
-        "padder": Pad(config["length"]),
+        "padder": Pad(config["length"], device=device),
         "num_samples": config["num_samples"],
         "wav_dir": os.path.join(config["input_dir"], "wavs"),
         "log_interval": config["log_interval"],
@@ -166,6 +165,7 @@ def init(config, device, args):
         "write_wavs": config["write_wavs"],
         "write_plots": config["write_plots"],
         "silence_threshold": float(config["silence_threshold"]),
+        "length": config["length"],
         "failed": 0,
         "ctr": 0,
     }
@@ -215,7 +215,7 @@ def prepare_iter(sample, exp):
 
 
 def run_iter(sample, exp, **r_args):
-    x, y = load_input(sample[0], exp["wav_dir"])
+    x, y = load_input(sample[0], exp["wav_dir"], exp["length"])
     exp = prepare_iter(sample, exp)
     try:
         adv = exp["Attacker"].generate(x, y, evalu=exp["eval_cm"], **r_args)[1]

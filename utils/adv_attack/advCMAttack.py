@@ -129,20 +129,12 @@ class CM_Attack:
     def _mrp(self, k):
         k_curr = k // self.interval
         self.m = np.min([k_curr + 1, self.optim_sat])
-        p = 1 / (k + 1 + self.k_div)
-
-        ##working
-        self.p = p  # / self.num_stacks
+        self.p = 1 / (k + 1 + self.k_div)
         self.r = (
-            (1 / (1 - p * self.num_stacks) - 1) / self.r_div + 1 if self.r_div else 1
+            (1 / (1 - self.p * self.num_stacks) - 1) / self.r_div + 1
+            if self.r_div
+            else 1
         )
-        ##
-
-        ##test##
-        # self.p = p / self.num_stacks
-        # p = 1 / (k + 1 + self.k_div+1.1)
-        # self.r = (1 / (1 - p*2) - 1) / self.r_div + 1 if self.r_div else 1
-        ##
 
     def _configure_attacks(self, k):
         self._mrp(k)
