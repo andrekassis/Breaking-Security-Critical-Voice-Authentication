@@ -300,13 +300,13 @@ class SpectralGateStationary(SpectralGate):
         sig_stft_db = 10 * torch.log10(
             torch.maximum(torch.tensor(1e-40, device=x.device), torch.abs(x) ** 2)
         )
-        sig_stft_db = torch.maximum(sig_stft_db, sig_stft_db.max() - 80.0)
-        return (
-            sig_stft_db
-            > (
-                torch.mean(sig_stft_db, -1)
-                + torch.std(sig_stft_db, -1) * n_std_thresh_stationary
-            ).t()
+        sig_stft_db = torch.maximum(
+            sig_stft_db,
+            torch.amax(sig_stft_db, (1, 2)).unsqueeze(-1).unsqueeze(-1) - 80.0,
+        )
+        return sig_stft_db > (
+            torch.mean(sig_stft_db, -1).unsqueeze(-1)
+            + torch.std(sig_stft_db, -1).unsqueeze(-1) * n_std_thresh_stationary
         )
 
     def _apply_mask(self, sig_mask, p):

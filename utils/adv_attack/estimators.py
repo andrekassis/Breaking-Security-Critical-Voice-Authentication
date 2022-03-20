@@ -123,7 +123,7 @@ class ESTIMATOR(
             label = np.argmax(label, axis=1)
 
         if isinstance(x, np.ndarray):
-            out = x / np.max(np.abs(x))
+            out = x / np.max(np.abs(x), axis=-1)[..., np.newaxis]
             var = torch.tensor(out, device=self.device, dtype=torch.float)
         else:
             var = (x / torch.max(torch.abs(x), axis=-1).values.unsqueeze(-1)).float()

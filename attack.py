@@ -70,7 +70,7 @@ def calc_succ(evalu, x, y):
 
 def iter_stats(x, adv, y, sample, exp):
     target = 1 - np.argmax(y, axis=1)
-    distance = np.max(np.abs(np.squeeze(adv - x[:, : adv.shape[-1]])))
+    distance = np.max(np.abs(np.squeeze(adv - x[:, : adv.shape[-1]])), -1)
     exp["bb_asv"] += np.array([calc_succ(e, adv, target) for e in exp["eval_asv"]])
     exp["bb_cm"] += np.array([calc_succ(e, adv, target) for e in exp["eval_cm"]])
 

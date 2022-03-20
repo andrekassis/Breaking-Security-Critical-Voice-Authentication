@@ -217,4 +217,4 @@ class CM_Attack:
         self._log(adv, y, evalu)
 
         adv = adv.detach().cpu().numpy()
-        return adv / np.max(np.abs(adv), axis=-1)
+        return adv / np.max(np.abs(adv), axis=-1)[..., np.newaxis]

@@ -421,7 +421,9 @@ class mfcc(lps, torch.nn.Module):
 
     def _mfcc(self, y):
         S = self._calc(y).permute(1, 2, 0)
-        ret = torch.maximum(S, torch.max(S) - self.top_db).float()
+        ret = torch.maximum(
+            S, torch.amax(S, (1, 2)).unsqueeze(-1).unsqueeze(-1) - self.top_db
+        ).float()
         ret = dct(ret, norm="ortho")
         return ret[:, :, : self.n_mfcc]
 
@@ -434,6 +436,7 @@ class mfcc(lps, torch.nn.Module):
         x = torch.reshape(
             F.pad(x, [1, 1], "constant"), (x.shape[0], 1, 1, int(x.shape[1]) + 2)
         )
+
         x = F.conv2d(x, win).squeeze(1).squeeze(1)[:, :-1]
         return self._mfcc(x)
 

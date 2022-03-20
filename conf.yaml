@@ -4,7 +4,7 @@ lengths: inputs/lengths
 
 seed: 0000 #1234
 sr: 16000
-length: 16000
+length: 64000
 system: ADVSR
 attack_type: CM_Attack
 num_samples:  10
@@ -113,13 +113,13 @@ CM_Attack:
         args:  
             epsilon: 0.005 
             max_iter: 30
-            delta: 0 #null #0
+            delta: null
             norm: null #'fro'
     
     last_layer:
         type: "TIME_DOMAIN_ATTACK"
         args:  
-            epsilon: 0.0015 #0.002 
+            epsilon: 0.0015
             max_iter: 30
             delta: null 
             norm: null #'fro'
@@ -127,7 +127,7 @@ CM_Attack:
     mid_layers: [
                  {'type': 'STFT_Attack',
                   'args': { 
-                           epsilon: 0.0004, #0.0003, 
+                           epsilon: 0.0004,
                            delta: 0,
                            nfft: 512,
                            window: 'kaiser_window', 
@@ -152,7 +152,7 @@ CM_Attack:
                           }
                  }
                 ]
-    itrs: 50
+    itrs: 6
     alpha_factors:
         STFT_Attack: 1
         FFT_Attack: 1
@@ -163,20 +163,20 @@ CM_Attack:
         stationary: true
         win: 'kaiser_window' #'blackman_window'
         n_fft: 512
-        hop_length: 96 #48 #64
+        hop_length: 96
         win_length: 512
         freq_mask_smooth_hz: 500
         time_mask_smooth_ms: 60
         padding: 30000
     stop_reduce: 20 
-    r_div: 3.5
-    k_div: 1.2 # best: 1.1*stacks - 1
-    stacks: 2
+    r_div: 7
+    k_div: 2.3 # best: 1.1*stacks - 1
+    stacks: 3
     interval: 1
     optim_sat: 15
-    stationary: true
+    stationary: false
     apply_args_to_layers: all #all_but_last #all_but_first
-    verbose: 1 #2
+    verbose: 1
 
 r_args:
     p: 1
