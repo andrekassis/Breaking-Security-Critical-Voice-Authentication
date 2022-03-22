@@ -47,7 +47,8 @@ def run_stt_eval(wav_dir, out_f, inputs):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp")
+    parser.add_argument("--ids", default = "inputs/transcription_inputs.txt")
     args = parser.parse_args()
     wav_dir = os.path.join(args.exp, "wavs")
     out_f = os.path.join(args.exp, "transcription_output.txt")
-    run_stt_eval(wav_dir, out_f, os.path.join(args.exp, "ids.txt"))
+    run_stt_eval(wav_dir, out_f, args.ids)

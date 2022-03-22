@@ -287,7 +287,7 @@ class AIR(nn.Module):
             return out
 
         neg = -out
-        return torch.cat((neg.unsqueeze(-2), out.unsqueeze(-2)), dim=-1)
+        return torch.cat((neg.unsqueeze(-1), out.unsqueeze(-1)), dim=-1)
 
     def load_state_dict(self, state_dict):
         fin = {"center": state_dict["final.center"]}

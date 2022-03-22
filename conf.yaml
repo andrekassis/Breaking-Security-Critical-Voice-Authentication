@@ -12,7 +12,7 @@ silence_threshold: "-35.0" #"-20.0" #-25.0
 log_interval: 1
 perf_log: perf.txt
 print_iter_out: True
-write_wavs: False #True
+write_wavs: True
 write_plots: False #True
 
 shadow:
@@ -111,7 +111,7 @@ CM_Attack:
     first_layer:
         type: "TIME_DOMAIN_ATTACK"
         args:  
-            epsilon: 0.005 
+            epsilon: 0.006 #0.005 
             max_iter: 30
             delta: null
             norm: null #'fro'
@@ -120,7 +120,7 @@ CM_Attack:
         type: "TIME_DOMAIN_ATTACK"
         args:  
             epsilon: 0.0015
-            max_iter: 30
+            max_iter: 1
             delta: null 
             norm: null #'fro'
         
@@ -152,12 +152,12 @@ CM_Attack:
                           }
                  }
                 ]
-    itrs: 6
+    itrs: 5
     alpha_factors:
         STFT_Attack: 1
         FFT_Attack: 1
     powers:
-        STFT_Attack: 0.9 
+        STFT_Attack: 0.9 #1 #0.9 
         FFT_Attack: 1.2 
     r_c:
         stationary: true
@@ -168,7 +168,7 @@ CM_Attack:
         freq_mask_smooth_hz: 500
         time_mask_smooth_ms: 60
         padding: 30000
-    stop_reduce: 20 
+    stop_reduce: 3 #20
     r_div: 7
     k_div: 2.3 # best: 1.1*stacks - 1
     stacks: 3
