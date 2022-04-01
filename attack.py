@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 import argparse
 import shutil
@@ -7,7 +8,6 @@ import warnings
 import numpy as np
 import soundfile as sf
 import yaml
-
 from tqdm import tqdm
 
 # pylint: disable=C0413
@@ -25,6 +25,7 @@ from utils.generic.sortedDict import SortedDict
 from utils.generic.score import Score
 from utils.generic.plot import plot
 from utils.generic.setup import setup_seed
+from utils.generic.preprocessing import butter_bandpass_filter, freq_increase
 
 trim_leading: AudioSegment = lambda x, threshold: x[
     dls(x, silence_threshold=threshold) :
@@ -37,8 +38,17 @@ strip_silence: AudioSegment = lambda x, threshold: trim_trailing(
 )
 
 
+def load(x, length=32000, pad=1000):
+    # length = np.min([x.shape[-1], length])
+    x = x[:, :length]
+    x = np.pad(x, [[0, 0], [pad, pad]])
+
+    x = butter_bandpass_filter(x, 20, 7800, fs=16000, order=5)
+    x = freq_increase(x, 1000, 6500, fs=16000, order=5)
+    return x
+
+
 def trim(audio, silence_threshold=-25.0):
-    # return np.expand_dims(sf.read(audio)[0], 0)
     sound = AudioSegment.from_file(audio)
     stripped = strip_silence(sound, silence_threshold)
     ret = np.array(stripped.get_array_of_samples())
@@ -57,9 +67,10 @@ def get_available_cuda():
     return device
 
 
-def load_input(path_label, wav_dir, length):
+def load_input(path_label, wav_dir, length, pad):
     inp = np.expand_dims(sf.read(os.path.join(wav_dir, path_label + ".wav"))[0], 0)
-    return inp[:, :length], np.array([[1, 0]])
+    inp = load(inp, length=length, pad=pad)
+    return inp, np.array([[1, 0]])
 
 
 def calc_succ(evalu, x, y):
@@ -112,8 +123,11 @@ def init_outdir(exp, args):
     shutil.copy(
         "utils/adv_attack/pgd_attacks.py", os.path.join(out_dir, "pgd_attacks.py")
     )
+    shutil.copy(
+        "utils/adv_attack/advCMAttack.py", os.path.join(out_dir, "advCMAttack.py")
+    )
     exp["out_file"] = os.path.join(out_dir, "results.txt")
-
+    exp["log_file"] = os.path.join(out_dir, "failed.txt")
     if exp["write_wavs"]:
         exp["out_wav"] = os.path.join(out_dir, "wavs")
         os.makedirs(exp["out_wav"])
@@ -121,9 +135,6 @@ def init_outdir(exp, args):
     if exp["write_plots"]:
         exp["pltdir"] = os.path.join(out_dir, "plots")
         os.makedirs(exp["pltdir"])
-        os.makedirs(os.path.join(exp["pltdir"], "raw"))
-        os.makedirs(os.path.join(exp["pltdir"], "fft"))
-
     return exp
 
 
@@ -166,7 +177,9 @@ def init(config, device, args):
         "write_plots": config["write_plots"],
         "silence_threshold": float(config["silence_threshold"]),
         "length": config["length"],
+        "pad": config["pad"],
         "failed": 0,
+        "failed_lst": [],
         "ctr": 0,
     }
 
@@ -192,7 +205,7 @@ def init(config, device, args):
 
 def prepare_iter(sample, exp):
     if exp["system"] != "ADVCM":
-        ref = random.sample(sample[1:-1], exp["num_samples"])
+        ref = sample[1:-1]
         ref = [
             trim(
                 os.path.join(exp["wav_dir"], r + ".wav"),
@@ -214,18 +227,32 @@ def prepare_iter(sample, exp):
     return exp
 
 
-def run_iter(sample, exp, **r_args):
-    x, y = load_input(sample[0], exp["wav_dir"], exp["length"])
-    exp = prepare_iter(sample, exp)
-    try:
-        adv = exp["Attacker"].generate(x, y, evalu=exp["eval_cm"], **r_args)[1]
-    # pylint: disable=W0703
-    except Exception as e:
-        exp["failed"] = exp["failed"] + 1
-        print("attack_failed! message: " + str(e) + ". skipping")
-        return x, x, y, False
-    # pylint: enable=W0703
-    return x, adv, y, True
+def log_failure(exp, s_id, e):
+    exp["failed"] = exp["failed"] + 1
+    exp["failed_lst"].append(s_id)
+    print(s_id + "! message: " + str(e) + ". skipping")
+
+
+def terminate(exp):
+    result = (
+        "bb - ("
+        + str(exp["bb_cm"])
+        + "), bb_asv - ("
+        + str(exp["bb_asv"])
+        + "), total: "
+        + str(exp["ctr"])
+        + ")"
+    )
+
+    if exp["failed"] > 0:
+        result = result + ", failed: (" + str(exp["failed"]) + ")"
+
+    print("All done! Experiment: " + exp["id"] + ". Stats: " + result)
+    if exp["failed"] > 0:
+        print("Failed samples written to: " + str(exp["log_file"]))
+        with open(exp["log_file"], "w") as f:
+            f.writelines([line + "\n"] for line in exp["failed_lst"])
+    sys.exit(0)
 
 
 def write_iter(x, adv, exp, sample, to_write):
@@ -252,14 +279,28 @@ def write_iter(x, adv, exp, sample, to_write):
         plot(sample[0], exp["out_wav"], exp["pltdir"], exp["sr"])
 
 
+def run_iter(sample, exp):
+    x, y = load_input(sample[0], exp["wav_dir"], exp["length"], exp["pad"])
+    exp = prepare_iter(sample, exp)
+    try:
+        adv = exp["Attacker"].generate(x, y, evalu=exp["eval_cm"], **exp["r_args"])[1]
+        x = np.expand_dims(np.concatenate(x), 0)
+        adv = np.expand_dims(np.concatenate(adv), 0)
+    except KeyboardInterrupt:
+        terminate(exp)
+
+    except Exception as e:
+        adv = np.copy(x)
+        log_failure(exp, sample[0], e)
+    to_write = iter_stats(x, adv, y, sample, exp)
+    write_iter(x, adv, exp, sample, to_write)
+
+
 def main(config, device, args):
     exp = init(config, device, args)
     for sample in tqdm(exp["inputs"]):
-        x, adv, y, ret = run_iter(sample, exp, **exp["r_args"])
-        if ret:
-            to_write = iter_stats(x, adv, y, sample, exp)
-            write_iter(x, adv, exp, sample, to_write)
-    print("done! # of failed samples: " + str(exp["failed"]))
+        run_iter(sample, exp)
+    terminate(exp)
 
 
 if __name__ == "__main__":

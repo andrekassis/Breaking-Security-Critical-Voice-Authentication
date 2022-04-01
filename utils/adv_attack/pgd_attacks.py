@@ -4,7 +4,7 @@ from abc import ABC
 import numpy as np
 import torch
 from .reduce import sp
-
+from utils.generic.preprocessing import preemphasize, deemphasize
 
 class PGD(ABC):
     # pylint: disable=R0902
@@ -91,6 +91,20 @@ class PGD(ABC):
             else:
                 self.eps = np.ones(shape)
 
+    @staticmethod
+    def _filter_delta(delta):
+        
+        freq = torch.fft.rfftfreq(delta.shape[-1], d=1/16000)
+        idx = torch.argmin(torch.abs(freq - 20))
+        
+        delta = torch.fft.rfft(delta) 
+        mask = torch.ones(delta.shape, device = delta.device)
+        mask[:, :idx] = 0
+        idx = torch.argmin(torch.abs(freq - 7980))
+        mask[:, idx:] = 0
+        
+        return torch.fft.irfft(delta * mask)
+        
     def _itr(self, X, y, **r_args):
         self._set_len(X.shape[-1], isinstance(X, np.ndarray))
         X_F = self._transform(X, requires_grad=False)
@@ -110,7 +124,7 @@ class PGD(ABC):
                 delta = torch.rand(size=X_F.shape, device=self.estimator.device).type(
                     self._convert_type(False)
                 )
-            delta = 2 * self.eps * delta - (self.eps * self.epsilon)
+            delta = 2 * self.epsilon * delta - (self.eps * self.epsilon)
             delta = self._project(delta)
         else:
             delta = self.delta
@@ -119,31 +133,24 @@ class PGD(ABC):
         for t in range(self.max_iter):
             gradient = self._gradient(X_F + delta, y, **r_args)
             if self.norm == "fro":
-                delta = gradient
+                delta = - gradient
                 delta = self._clip(self._project(delta))
             else:
                 delta = delta - alpha * self._sgn(gradient)
                 delta = self._clip(self._project(delta))
         # pylint: enable=W0612
+        delta = self._inverse_transform(delta, requires_grad=False)
+        return self._to_range(delta, X)
 
-        X_r = self._inverse_transform(X_F + delta, requires_grad=False)
-        X_r = (
-            X_r / np.max(np.abs(X_r), -1)[..., np.newaxis]
-            if isinstance(X_r, np.ndarray)
-            else X_r / torch.max(torch.abs(X_r), -1).values.unsqueeze(-1)
-        )
-        delt = X_r[:, : X.shape[-1]] - X[:, : X_r.shape[-1]]
-        return delt
-
-    def generate(self, x, y, **r_args):
+    def generate(self, x, y, preemphasis=False, **r_args):
         label = 1 - y
         y = label
         label = np.argmax(np.array(label[0]))
+        if preemphasis:
+            delta = self._itr(preemphasize(x), y, **r_args)
+            return deemphasize(preemphasize(x)[:, : delta.shape[-1]] + delta)
         delta = self._itr(x, y, **r_args)
-
-        ret = x[:, : delta.shape[-1]] + delta
-        return ret
-
+        return x[:, : delta.shape[-1]] + delta
 
 class TIME_DOMAIN_ATTACK(PGD):
     def __init__(self, estimator, epsilon, max_iter, delta=None, r_c=None, norm=None):
@@ -171,6 +178,16 @@ class TIME_DOMAIN_ATTACK(PGD):
             return np.sign(x)
         return torch.sign(x)
 
+    def _to_range(self, delta, X):
+        delta = self._filter_delta(delta)
+
+        X_r = delta + X[:, : delta.shape[-1]]
+        X_r = (
+            X_r / np.max(np.abs(X_r), -1)[..., np.newaxis]
+            if isinstance(X_r, np.ndarray)
+            else X_r / torch.max(torch.abs(X_r), -1).values.unsqueeze(-1)
+        )
+        return X_r - X[:, : X_r.shape[-1]]
 
 class Spectral_Attack(PGD):
     def __init__(
@@ -196,6 +213,12 @@ class Spectral_Attack(PGD):
         if self.factor:
             assert self.sr is not None
             assert self.thresh is not None
+
+    def _to_range(self, delta, X):
+        delta = self._filter_delta(delta)
+        X_r = delta + X[:, : delta.shape[-1]] 
+        X_r = X_r / torch.max(torch.abs(X_r), -1).values.unsqueeze(-1)
+        return X_r - X[:, : X_r.shape[-1]]
 
     def _set_len(self, length, is_array):
         if self.length == length:
@@ -225,6 +248,7 @@ class Spectral_Attack(PGD):
         return self._clip_torch(x)
 
     def _clip_torch(self, x):
+        return torch.abs(x).clip(-self.epsilon, self.epsilon) * torch.sgn(x)
         if self.norm == "fro":
             return x / torch.norm(x) * self.epsilon
         sgn = torch.sign(x.real) + 1j * torch.sign(x.imag)
@@ -250,7 +274,7 @@ class Spectral_Attack(PGD):
     def _sgn(x):
         if isinstance(x, np.ndarray):
             return np.sign(x.real) + 1j * np.sign(x.imag)
-        return torch.sign(x.real) + 1j * torch.sign(x.imag)
+        return torch.sgn(x)
 
     def _project(self, delta):
         if self.mask is None:
