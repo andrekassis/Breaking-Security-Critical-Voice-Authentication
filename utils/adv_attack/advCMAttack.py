@@ -151,8 +151,7 @@ class CM_Attack:
     def _clip(self, adv, k):
         with torch.no_grad():
             adv = (adv * self.r).clip(-1, 1) if k < self.stop_reduce else adv
-            adv = (adv * self.r).clip(-95, 95) if k == self.stop_reduce else adv
-        return adv
+        return adv  # / torch.max(torch.abs(adv), -1).values.unsqueeze(-1)
 
     def _run_layers(self, adv, y, k, r_args):
         for i, m in enumerate(self.mid_layers_conf):
@@ -185,15 +184,17 @@ class CM_Attack:
         if idx != 0 and idx != -1:
             return adv
         if idx == 0 and self.first_layer:
-            return self.first_layer.generate(adv, y, **run_args[0])
+            return self.first_layer.generate(adv, y, preemphasis=False, **run_args[0])
         if idx == -1 and self.last_layer:
-            return self.last_layer.generate(adv, y, **run_args[-1])
+            return self.last_layer.generate(adv, y, preemphasis=True, **run_args[-1])
         return adv
 
     def generate(self, adv, y, evalu=None, **r_args):
         adv = torch.tensor(
             adv, requires_grad=True, device=self.estimator.device, dtype=torch.float
         )
+        adv = self.spectral_gate(adv, p=0.5)
+        adv = adv / torch.max(torch.abs(adv), -1).values.unsqueeze(-1)
         run_args, start_mid, end_mid = self.get_r_args(**r_args)
 
         self._log(adv, y, evalu)

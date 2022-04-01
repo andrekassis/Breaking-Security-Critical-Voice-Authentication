@@ -65,20 +65,28 @@ class ADVSR(BaseModel):
     def set_ref(self, ref, device):
         y = torch.tensor(ref, device=device)
         t_feats = self.get_feats(y)
-        self.t_ivector = self._extract_ivector(t_feats)
+        self.t_ivector = torch.stack(
+            [self._extract_ivector(t.unsqueeze(0)).squeeze(0) for t in t_feats]
+        )
+
+    def _get_batch(self, batch_sz):
+        perm = torch.randperm(self.t_ivector.size(0))
+        idx = perm[:batch_sz]
+        return self.t_ivector[idx]
 
     def attack_pipeline(self, x, y, aggregate=True):
+        batch = self._get_batch(30)  # batch_sz)
         feats = self.get_feats(x)
         testivector = self._extract_ivector(feats)
-        loss = self.model.ComputePLDAScore(self.t_ivector, testivector)
+        loss = self.model.ComputePLDAScore(batch, testivector)
 
-        factor = torch.ones(y.shape, device=loss.device)
+        factor = torch.ones(y.shape, device=loss.device).unsqueeze(-1)
         factor[y == 1] = -1
         ret = loss * factor
 
         if aggregate:
             ret = torch.mean(ret, axis=-1)
-
+        ret = torch.mean(ret, axis=0)
         return ret
 
     def get_score(self, x, ret_logits=True):
