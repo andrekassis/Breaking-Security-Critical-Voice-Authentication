@@ -37,7 +37,7 @@ discriminator_wb:
 discriminators:
     args:
         cm: #ignored for ADVSR
-            selector: [WAV2VEC, SSNet, lcnnFull, rawGAT_st, mcg, mlcg, Res2Net, AIR, darts, comparative, RawDarts, AASSIST, AASSIST-L, AIR_AM]  
+            selector: [SSNet, lcnnFull, rawGAT_st, mcg, mlcg, Res2Net, AIR, darts, comparative, RawDarts, AASSIST, AASSIST-L, AIR_AM] #WAV2VEC  
         asv: #ignored for ADVCM
             selector: [mfcc, lps]
 
