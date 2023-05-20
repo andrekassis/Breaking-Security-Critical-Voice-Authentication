@@ -2,6 +2,7 @@
 
 import torch
 import numpy as np
+from . import schedulers
 
 
 class CompScheduler:
@@ -16,6 +17,26 @@ class CompScheduler:
 
     def increase_delta(self):
         return
+
+
+"""
+class SENet_FFT_scheduler:
+    def __init__(self, optimizer, n_warmup):
+        self.optimizer = optimizer
+        self.n_warmup = n_warmup
+        self.steps = 0
+    def update(self, lr, epoch_num, step):
+        if step:
+            self.steps += 1
+            if self.steps <= self.n_warmup:
+                1/np.sqrt(self.steps)
+            lr = lr * (self.lr_decay ** (epoch_num // self.interval))
+            for param_group in self.optimizer.param_groups:
+                param_group["lr"] = lr
+
+    def increase_delta(self):
+        return
+"""
 
 
 class AIRScheduler:
@@ -48,6 +69,33 @@ class SSNetScheduler:
         return
 
 
+class GE2EScheduler:
+    def __init__(self, optimizer, gamma=0.95):
+        self.lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer, gamma=gamma
+        )
+
+    def update(self, lr, epoch_num, step):
+        if step:
+            self.lr_scheduler.step()
+
+    def increase_delta(self):
+        return
+
+
+"""
+class GE2EScheduler:
+    def __init__(self, optimizer):
+        return
+
+    def update(self, lr, epoch_num, step):
+        return
+
+    def increase_delta(self):
+        return
+"""
+
+
 class DartsScheduler:
     def __init__(self, optimizer, num_epochs, lr_min):
         self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -63,6 +111,17 @@ class DartsScheduler:
 
 
 class rawGATScheduler:
+    def __init__(self, optimizer):
+        return
+
+    def update(self, lr, epoch_num, step):
+        return
+
+    def increase_delta(self):
+        return
+
+
+class WAV2VECScheduler:
     def __init__(self, optimizer):
         return
 
@@ -122,3 +181,56 @@ class AASSISTScheduler:
 
     def increase_delta(self):
         return
+
+
+class OptimizerWrapper:
+    def __init__(self, optimizer, sched):
+        # pylint: disable=W0621
+        self.optimizer = optimizer
+        self.lr_scheduler = [
+            getattr(schedulers, sched["type"])(opt, **sched["params"])
+            for opt in self.optimizer
+        ]
+
+    def update(self, lr, epoch_num, step):
+        # pylint: disable=W0621
+        for s in self.lr_scheduler:
+            s.update(lr, epoch_num, step)
+
+    def zero_grad(self):
+        for o in self.optimizer:
+            o.zero_grad()
+
+    def step(self):
+        for o in self.optimizer:
+            o.step()
+
+    def increase_delta(self):
+        for s in self.lr_scheduler:
+            s.increase_delta()
+
+    def load(self, itrs, results, lr, num_batch, val_metric):
+        for epoch_num in range(itrs):
+            for t in range(num_batch):
+                self.zero_grad()
+                self.step()
+                self.update(lr, epoch_num, False)
+            self.update(lr, epoch_num, True)
+
+            res = results[epoch_num]
+            if epoch_num == 0:
+                best_res = res
+                best_epoch = epoch_num
+                best_epoch_tmp = epoch_num
+
+            is_best = (
+                res < best_res if val_metric in ("eer", "loss") else res > best_res
+            )
+            if is_best:
+                best_epoch = epoch_num
+                best_epoch_tmp = epoch_num
+                best_res = res
+
+            if epoch_num - best_epoch_tmp > 2:
+                self.increase_delta()
+                best_epoch_tmp = epoch_num

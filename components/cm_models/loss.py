@@ -53,10 +53,14 @@ class NllLoss(nn.Module):
 class CEL(nn.Module):
     def __init__(self, weights, device="cuda:0"):
         super(CEL, self).__init__()
+        # print(device)
         weights = torch.tensor(np.array(weights), dtype=torch.float32, device=device)
         self.loss = nn.CrossEntropyLoss(weight=weights)
 
     def forward(self, output, target):
+        # print(target.device)
+        # print(output.device)
+        # print(weights.device)
         return self.loss(output, target)
 
 
@@ -82,6 +86,7 @@ class AngleLoss(nn.Module):
 
         self.lamb = max(self.LambdaMin, self.LambdaMax / (1 + 0.1 * self.it))
         output = cos_theta * 1.0  # size=(B,Classnum)
+
         output[index] -= cos_theta[index] * (1.0 + 0) / (1 + self.lamb)
         output[index] += psi_theta[index] * (1.0 + 0) / (1 + self.lamb)
 

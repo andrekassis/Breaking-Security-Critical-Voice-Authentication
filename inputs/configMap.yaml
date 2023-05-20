@@ -1,0 +1,80 @@
+cm:
+    dev:
+        lcnnFull: 
+            config: configs/dev/cm/lcnnFull/config.json
+            path: trained_models/cm/lcnnFull/dev/model.pth
+            eer_point: 1.6584343910217285
+
+    train:
+        WAV2VEC:
+            config: configs/train/cm/wav2vec/config.json
+            path: trained_models/cm/WAV2VEC/train/model.pth
+            eer_point: -1.0878366231918335
+        comparative:
+            config: configs/train/cm/comparative/config.json
+            path: trained_models/cm/comparative/train/model.pth
+            eer_point: 0.9978963732719421
+        AIR_AM:
+            config: configs/train/cm/AIR_AM/config.json
+            path: trained_models/cm/AIR_AM/train/model.pth
+            eer_point: 0.7961243391036987
+        lcnnFull: 
+            config: configs/train/cm/lcnnFull/config.json
+            path: trained_models/cm/lcnnFull/train/model.pth
+            eer_point: 2.0050013065338135
+        AASSIST:
+            system: ADVCM 
+            config: configs/train/cm/AASSIST/config.json
+            path: trained_models/cm/AASSIST/train/model.pth
+            eer_point: 1.4938158988952637
+        RawDarts: 
+            config: configs/train/cm/RawDarts/config.json
+            path: trained_models/cm/pcdarts_raw/train/model.pth
+            eer_point: 0.9611527323722839
+        AIR: 
+            config: configs/train/cm/AIR/config.json
+            path: trained_models/cm/AIR/train/model.pth
+            eer_point: 0.9917457103729248
+        mlcg: 
+            config: configs/train/cm/mlcg/config.json
+            path: trained_models/cm/Channel-wise-Gated-Res2Net/train/mlcg/model.pth
+            eer_point: 0.3592711091041565
+        SSNet: 
+            config: configs/train/cm/SSNet/config.json
+            path: trained_models/cm/SSNet1D/train/model.pth
+            eer_point: 0.3997
+        rawGAT_st: 
+            config: configs/train/cm/rawGAT_st/config.json
+            path: trained_models/cm/rawGAT_st/train/model.pth
+            eer_point: 1.450256586074829
+        darts: 
+            config: configs/train/cm/darts/config.json
+            path: trained_models/cm/pc-darts-anti-spoofing/train/model.pth
+            eer_point: 6.93690824508667
+        Res2Net: 
+            config: configs/train/cm/Res2Net/config.json
+            path: trained_models/cm/ASV-anti-spoofing-with-Res2Net/train/model.pth
+            eer_point: 0.8174083232879639
+        mcg: 
+            config: configs/train/cm/mcg/config.json
+            path: trained_models/cm/Channel-wise-Gated-Res2Net/train/mcg/model.pth
+            eer_point: 0.09140881150960922
+        AASSIST-L: 
+            config: configs/train/cm/AASSIST-L/config.json
+            path: trained_models/cm/AASSIST-L/train/model.pth
+            eer_point: 1.763255000114441
+asv:
+    dev:
+        mfcc: 
+            config: configs/dev/asv/mfcc/config.json
+            path: trained_models/asv/mfcc/dev
+            eer_point: -10.5635
+    train:
+        lps: 
+            config: configs/train/asv/lps/config.json
+            path: trained_models/asv/lpms/train
+            eer_point: -40.8154
+        mfcc: 
+            config: configs/train/asv/mfcc/config.json
+            path: trained_models/asv/mfcc/train
+            eer_point: -9.9366

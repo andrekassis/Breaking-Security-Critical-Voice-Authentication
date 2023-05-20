@@ -57,4 +57,4 @@ class SVsystem(object):
         return
 
     def to(self, device):
-        return
+        return self

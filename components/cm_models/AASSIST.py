@@ -312,7 +312,7 @@ class CONV(nn.Module):
         self.filters = (band_pass_filter).view(self.out_channels, 1, self.kernel_size)
 
         return F.conv1d(
-            x,
+            x.float(),
             self.filters,
             stride=self.stride,
             padding=self.padding,
@@ -369,13 +369,10 @@ class Residual_block(nn.Module):
         else:
             out = x
         out = self.conv1(x)
-
-        # print('out',out.shape)
         out = self.bn2(out)
         out = self.selu(out)
-        # print('out',out.shape)
         out = self.conv2(out)
-        # print('conv2 out',out.shape)
+
         if self.downsample:
             identity = self.conv_downsample(identity)
 

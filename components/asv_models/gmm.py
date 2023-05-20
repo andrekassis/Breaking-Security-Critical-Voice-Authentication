@@ -71,6 +71,7 @@ class FullGMM(object):
         ).squeeze(-1)
 
     def ComponentLogLikelihood(self, data):
+        # print(data.shape)
         loglike = torch.matmul(self.means_invcovars, data.unsqueeze(-1)).squeeze(-1)
         mul = torch.matmul(self.invcovars, data.permute((0, 2, 1)).unsqueeze(1))
         loglike -= 0.5 * torch.matmul(

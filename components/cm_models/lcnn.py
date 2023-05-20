@@ -108,7 +108,6 @@ class AngleLoss(nn.Module):
         index.scatter_(1, target.data.view(-1, 1), 1)
         index = index.byte()  # to uint8
         index = Variable(index)
-        print(index)
         self.lamb = max(self.LambdaMin, self.LambdaMax / (1 + 0.1 * self.it))
         output = cos_theta * 1.0  # size=(B,Classnum)
         output[index] -= cos_theta[index] * (1.0 + 0) / (1 + self.lamb)
@@ -223,26 +222,20 @@ class LCNN(nn.Module):
 
         if self.layer < 2 and mode == 1:
             return x
-        # print(x.size())
         x = self.layer2(x)
 
         if self.layer < 3 and mode == 1:
             return x
-        # print(x.size())
         x = self.layer3(x)
 
         if self.layer < 4 and mode == 1:
             return x
-        # print(x.size())
         x = self.layer4(x)
-        # print(x.size())
 
         if self.layer < 5 and mode == 1:
             return x
 
         x = x.view(-1, 53 * 37 * self.c_s[4])
-        # print(x.size())
-        # print('x'*100)
         x = self.fc1(x)
 
         if eval and self.asoftmax:

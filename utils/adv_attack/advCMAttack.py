@@ -145,19 +145,49 @@ class CM_Attack:
             self.mid_layers[m["type"]].alpha = (
                 self.mid_layers[m["type"]].epsilon / self.alpha_factors[m["type"]]
             )
-            self.mid_layers[m["type"]].delta = m["args"]["delta"]
-            self.mid_layers[m["type"]].max_iter = m["args"]["max_iter"]
+            self.mid_layers[m["type"]].delta = m["args"].get("delta")
+            self.mid_layers[m["type"]].max_iter = m["args"].get("max_iter", 0)
 
-    def _clip(self, adv, k):
+    def _clip(self, adv, k, start=0, end=None):
         with torch.no_grad():
+            # return (adv * self.r).clip(-1, 1) if k < self.stop_reduce else adv
+            left = adv[:, :start]
+            if end is None:
+                end = adv.shape[-1]
+            mid = adv[:, start:end]
+            right = adv[:, end:]
+            mid = (mid * self.r).clip(-1, 1) if k < self.stop_reduce else mid
+            mid = mid / torch.max(torch.abs(mid), -1).values.unsqueeze(-1)
+            adv = torch.cat((left, mid, right), -1)
+            return adv
+
             adv = (adv * self.r).clip(-1, 1) if k < self.stop_reduce else adv
-        return adv  # / torch.max(torch.abs(adv), -1).values.unsqueeze(-1)
+        return adv / torch.max(torch.abs(adv), -1).values.unsqueeze(-1)
 
-    def _run_layers(self, adv, y, k, r_args):
+    def _run_layers(self, adv, y, k, r_args, start=0, end=None):
         for i, m in enumerate(self.mid_layers_conf):
-            adv = self.mid_layers[m["type"]].generate(adv, y, **r_args[i])
-        with torch.no_grad():
-            adv = self.spectral_gate(adv, p=self.p) if k <= self.stop_reduce else adv
+            adv = self.mid_layers[m["type"]].generate(
+                # adv, y, preemphasis=False, start=0, end=None, **r_args[i]
+                adv,
+                y,
+                preemphasis=False,
+                start=start,
+                end=end,
+                **r_args[i]
+            )
+            with torch.no_grad():
+
+                left = adv[:, :start]
+                if end is None:
+                    end = adv.shape[-1]
+                mid = adv[:, start:end]
+                right = adv[:, end:]
+                mid = (
+                    self.spectral_gate(mid, p=self.p) if k <= self.stop_reduce else mid
+                )
+                adv = torch.cat((left, mid, right), -1)
+
+                # adv = self.spectral_gate(adv, p=self.p) if k <= self.stop_reduce else adv
         return adv
 
     def _log(self, adv, y, evalu=None):
@@ -180,26 +210,44 @@ class CM_Attack:
         start_mid, end_mid = self._get_idx_of_mid_layers()
         return run_args, start_mid, end_mid
 
-    def _run_edge_layer(self, adv, y, idx, run_args):
+    def _run_edge_layer(self, adv, y, idx, run_args, start=0, end=None):
+        # start, end = 0, None
         if idx != 0 and idx != -1:
             return adv
         if idx == 0 and self.first_layer:
-            return self.first_layer.generate(adv, y, preemphasis=False, **run_args[0])
+            # start, end = 0, None
+            return self.first_layer.generate(
+                # start, end = 0, None
+                adv,
+                y,
+                preemphasis=False,
+                start=start,
+                end=end,
+                **run_args[0]
+                # adv, y, preemphasis=True, start=start, end=end, **run_args[0]
+            )
         if idx == -1 and self.last_layer:
-            return self.last_layer.generate(adv, y, preemphasis=True, **run_args[-1])
+            return self.last_layer.generate(
+                # adv, y, preemphasis=False, start=start, end=end, **run_args[-1]
+                adv,
+                y,
+                preemphasis=True,
+                start=start,
+                end=end,
+                **run_args[-1]
+            )
         return adv
 
-    def generate(self, adv, y, evalu=None, **r_args):
+    def generate(self, adv, y, evalu=None, start=0, end=None, **r_args):
         adv = torch.tensor(
             adv, requires_grad=True, device=self.estimator.device, dtype=torch.float
         )
-        adv = self.spectral_gate(adv, p=0.5)
-        adv = adv / torch.max(torch.abs(adv), -1).values.unsqueeze(-1)
+
         run_args, start_mid, end_mid = self.get_r_args(**r_args)
 
         self._log(adv, y, evalu)
 
-        adv = self._run_edge_layer(adv, y, 0, run_args)
+        adv = self._run_edge_layer(adv, y, 0, run_args, start=start, end=end)
 
         self._log(adv, y, evalu)
 
@@ -207,13 +255,15 @@ class CM_Attack:
             self._configure_attacks(k)
 
             for stack in range(self.num_stacks):
-                adv = self._run_layers(adv, y, k, run_args[start_mid:end_mid])
+                adv = self._run_layers(
+                    adv, y, k, run_args[start_mid:end_mid], start=start, end=end
+                )
 
-            adv = self._clip(adv, k)
+            adv = self._clip(adv, k, start=start, end=end)
 
             self._log(adv, y, evalu)
 
-        adv = self._run_edge_layer(adv, y, -1, run_args)
+        adv = self._run_edge_layer(adv, y, -1, run_args, start=start, end=end)
 
         self._log(adv, y, evalu)
 

@@ -4,9 +4,142 @@ import sys
 import random
 import soundfile as sf
 import numpy as np
+from scipy import signal
 import torch
 import torch.utils.data.sampler as torch_sampler
 from torch.utils.data.dataloader import Dataset
+import numpy as np
+from random import randrange
+import copy
+
+
+def normWav(x, always):
+    if always:
+        x = x / np.amax(abs(x))
+    elif np.amax(abs(x)) > 1:
+        x = x / np.amax(abs(x))
+    return x
+
+
+def genNotchCoeffs(
+    nBands, minF, maxF, minBW, maxBW, minCoeff, maxCoeff, minG, maxG, fs
+):
+    b = 1
+    for i in range(0, nBands):
+        fc = randRange(minF, maxF, 0)
+        bw = randRange(minBW, maxBW, 0)
+        c = randRange(minCoeff, maxCoeff, 1)
+
+        if c / 2 == int(c / 2):
+            c = c + 1
+        f1 = fc - bw / 2
+        f2 = fc + bw / 2
+        if f1 <= 0:
+            f1 = 1 / 1000
+        if f2 >= fs / 2:
+            f2 = fs / 2 - 1 / 1000
+        b = np.convolve(
+            signal.firwin(c, [float(f1), float(f2)], window="hamming", fs=fs), b
+        )
+
+    G = randRange(minG, maxG, 0)
+    _, h = signal.freqz(b, 1, fs=fs)
+    b = pow(10, G / 20) * b / np.amax(abs(h))
+    return b
+
+
+def filterFIR(x, b):
+    N = b.shape[0] + 1
+    xpad = np.pad(x, (0, N), "constant")
+    y = signal.lfilter(b, 1, xpad)
+    y = y[int(N / 2) : int(y.shape[0] - N / 2)]
+    return y
+
+
+def randRange(x1, x2, integer):
+    y = np.random.uniform(low=x1, high=x2, size=(1,))
+    if integer:
+        y = int(y)
+    return y
+
+
+def LnL_convolutive_noise(
+    x,
+    N_f,
+    nBands,
+    minF,
+    maxF,
+    minBW,
+    maxBW,
+    minCoeff,
+    maxCoeff,
+    minG,
+    maxG,
+    minBiasLinNonLin,
+    maxBiasLinNonLin,
+    fs,
+):
+    y = [0] * x.shape[0]
+    for i in range(0, N_f):
+        if i == 1:
+            minG = minG - minBiasLinNonLin
+            maxG = maxG - maxBiasLinNonLin
+        b = genNotchCoeffs(
+            nBands, minF, maxF, minBW, maxBW, minCoeff, maxCoeff, minG, maxG, fs
+        )
+        y = y + filterFIR(np.power(x, (i + 1)), b)
+    y = y - np.mean(y)
+    y = normWav(y, 0)
+    return y
+
+
+# Impulsive signal dependent noise
+def ISD_additive_noise(x, P, g_sd):
+    beta = randRange(0, P, 0)
+
+    y = copy.deepcopy(x)
+    x_len = x.shape[0]
+    n = int(x_len * (beta / 100))
+    p = np.random.permutation(x_len)[:n]
+    f_r = np.multiply(
+        ((2 * np.random.rand(p.shape[0])) - 1), ((2 * np.random.rand(p.shape[0])) - 1)
+    )
+    r = g_sd * x[p] * f_r
+    y[p] = x[p] + r
+    y = normWav(y, 0)
+    return y
+
+
+# Stationary signal independent noise
+
+
+def SSI_additive_noise(
+    x,
+    SNRmin,
+    SNRmax,
+    nBands,
+    minF,
+    maxF,
+    minBW,
+    maxBW,
+    minCoeff,
+    maxCoeff,
+    minG,
+    maxG,
+    fs,
+):
+    noise = np.random.normal(0, 1, x.shape[0])
+    b = genNotchCoeffs(
+        nBands, minF, maxF, minBW, maxBW, minCoeff, maxCoeff, minG, maxG, fs
+    )
+    noise = filterFIR(noise, b)
+    noise = normWav(noise, 1)
+    SNR = randRange(SNRmin, SNRmax, 0)
+    noise = (
+        noise / np.linalg.norm(noise, 2) * np.linalg.norm(x, 2) / 10.0 ** (0.05 * SNR)
+    )
+    x = x + noise
+    return x
 
 
 def _pad_sequence(batch, padding_value=0.0):
@@ -104,7 +237,7 @@ class SamplerBlockShuffleByLen(torch_sampler.Sampler):
 
 
 class CMDataset(Dataset):
-    def __init__(self, protocol, path_data, extractor, flip_label, device):
+    def __init__(self, protocol, path_data, extractor, flip_label, device, **kwargs):
         super().__init__()
         with open(protocol, "r", encoding="utf8") as f:
             self.protocol = [line.strip().split(" ") for line in f]
@@ -124,11 +257,14 @@ class CMDataset(Dataset):
     def len(self):
         return self.__len__()
 
-    def __getitem__(self, index):
-        test_sample = np.expand_dims(
+    def _obtain(self, index):
+        return np.expand_dims(
             sf.read(os.path.join(self.data_path, self.protocol[index][0] + ".wav"))[0],
             0,
         )
+
+    def __getitem__(self, index):
+        test_sample = self._obtain(index)
         test_sample = torch.tensor(test_sample, dtype=torch.float, device=self.device)
         with torch.no_grad():
             test_sample = self.extractor(test_sample).squeeze(1).cpu()
@@ -136,8 +272,22 @@ class CMDataset(Dataset):
         return test_sample, test_label
 
 
+def CMRawBoost(CMDataset):
+    def process_Rawboost_feature(self, feature):
+        feature = LnL_convolutive_noise(
+            feature, 5, 5, 20, 8000, 100, 1000, 10, 100, 0, 0, 5, 20, 16000
+        )
+        feature = ISD_additive_noise(feature, 10, 2)
+        return feature
+
+    def _obtain(self, index):
+        x = sf.read(os.path.join(self.data_path, self.protocol[index][0] + ".wav"))[0]
+        x = self.process_Rawboost_feature(x)
+        return np.expand_dims(x, 0)
+
+
 class ASVDataset(Dataset):
-    def __init__(self, protocol, path_data, extractor, flip_label, device):
+    def __init__(self, protocol, path_data, extractor, flip_label, device, **kwargs):
         super().__init__()
         with open(protocol, "r", encoding="utf8") as f:
             self.protocol = [line.strip().split(" ") for line in f]

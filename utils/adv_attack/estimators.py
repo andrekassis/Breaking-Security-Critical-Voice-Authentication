@@ -100,7 +100,14 @@ class ESTIMATOR(
             var = torch.tensor(x, device=self.device, dtype=torch.float)
         else:
             var = x
+        ret = (
+            self.attack.get_score(var, self.logits).detach().cpu().numpy().squeeze()[1]
+        )
 
+        score = -float(ret) + self.eer[0]
+        final = np.array([[score, -score]])
+
+        return final
         pred = self.attack.get_score(var, self.logits)[:, 1].squeeze()
         if x.shape[0] == 1:
             pred = pred.unsqueeze(0)
@@ -134,6 +141,7 @@ class ESTIMATOR(
             score = score.unsqueeze(0)
 
         score = score.detach().cpu().numpy()
+        # print(score)
         result = [
             ((score[i] < self.eer).all() and label == 0)
             or ((score[i] >= self.eer).all() and label == 1)

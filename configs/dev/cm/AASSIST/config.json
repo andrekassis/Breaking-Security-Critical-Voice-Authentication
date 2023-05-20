@@ -21,7 +21,7 @@
     },
     "loss": {
         "type": "CEL",
-		"requires_device": true,
+	"requires_device": true,
 	    "args": {
 	        "weights": [
 			    0.1, 

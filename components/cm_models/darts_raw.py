@@ -325,7 +325,7 @@ class SincConv_fast(nn.Module):
             f0 = np.random.randint(0, v - f)
             self.filters[f0 : f0 + f, :, :] = 0
         output = F.conv1d(
-            waveforms,
+            waveforms.float(),
             self.filters,
             stride=self.stride,
             padding=self.padding,

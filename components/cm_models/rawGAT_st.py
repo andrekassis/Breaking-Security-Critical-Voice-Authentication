@@ -236,7 +236,7 @@ class CONV(nn.Module):
         self.filters = (band_pass_filter).view(self.out_channels, 1, self.kernel_size)
 
         return F.conv1d(
-            x,
+            x.float(),
             self.filters,
             stride=self.stride,
             padding=self.padding,

@@ -215,16 +215,8 @@ class Model(torch.nn.Module):
             out_m = torch.from_numpy(data_mean_std[2])
             out_s = torch.from_numpy(data_mean_std[3])
             if in_m.shape[0] != in_dim or in_s.shape[0] != in_dim:
-                print("Input dim: {:d}".format(in_dim))
-                print("Mean dim: {:d}".format(in_m.shape[0]))
-                print("Std dim: {:d}".format(in_s.shape[0]))
-                print("Input dimension incompatible")
                 sys.exit(1)
             if out_m.shape[0] != out_dim or out_s.shape[0] != out_dim:
-                print("Output dim: {:d}".format(out_dim))
-                print("Mean dim: {:d}".format(out_m.shape[0]))
-                print("Std dim: {:d}".format(out_s.shape[0]))
-                print("Output dimension incompatible")
                 sys.exit(1)
         else:
             in_m = torch.zeros([in_dim])
@@ -298,7 +290,6 @@ class Model(torch.nn.Module):
         try:
             return [self.protocol_parser[x] for x in filenames]
         except KeyError:
-            print("Cannot find target data for %s" % (str(filenames)))
             exit(1)
 
     def forward(self, x, fileinfo=None, eval=False):

@@ -1,44 +1,15 @@
-------------------------------------------------------------------------------------------                                                                                        
-																						|
-_saved_dev/models/LA_lcnn_LPSseg_uf_seg600/20201105_200857/checkpoint-epoch9.pth        |        
-EER': 4.36198924380695, 'EER_point': 1.6584343910217285                                 |
-                                                                                        |
-																						|
-_saved_dev/models/LA_SENet12_LPSseg_uf_seg600/20201101_152835/model_best.pth            |
-'EER': 7.725474617960107, 'EER_point': -0.007275514770299196                            |
-                                                                                        |
-																						|
-_saved_dev/models/LA_lcnnHalf_LPSseg_uf_seg600/20201220_142006/checkpoint-epoch6.pth    |
-'EER': 8.062923352626852, 'EER_point': 1.9424939155578613                               |
-                                                                                        |                                                 
-------------------------------------------------------------------------------------------
-                                                                                        |
-_saved/models/LA_lcnn_LPSseg_uf_seg600/20201222_113413/model_best.pt                    |
-'EER': 5.109229157234177, 'EER_point': 2.0050013065338135                               |
-                                                                                        |
-																						|
-_saved/models/LA_lcnnHalf_LPSseg_uf_seg600/20200824_182349/model_best.pth               |
-'EER': 6.16100042628307, 'EER_point': 2.0069632530212402                                |
-                                                                                        |
-																						|
-_saved/models/LA_SENet12_LPSseg_uf_seg600/20200824_181758/model_best.pth                |
-'EER': 10.917373128323293, 'EER_point': -0.010745048522949219                           |
-------------------------------------------------------------------------------------------                                                                                         
-																						|
-																						|
-lpms /home/akassis/projects/def-uhengart/akassis/kaldi/adversarial/adversarial-attack/i-vector-lpms_dev -51.5645 5.525
-mfcc /home/akassis/projects/def-uhengart/akassis/kaldi/adversarial/adversarial-attack/i-vector-mfcc_exp_dev -10.5635 2.76
-
-
-																						|
-																						|
-																						|
-mfcc /home/akassis/projects/def-uhengart/akassis/kaldi/adversarial/adversarial-attack/i-vector-mfcc_train -9.9366 3
-lpms /home/akassis/projects/def-uhengart/akassis/kaldi/adversarial/adversarial-attack/i-vector-lpms_train -40.8154 4.645																						|
-																						|
-																						|
-																						|
-																						|
-																						|
-------------------------------------------------------------------------------------------
-																						 
+comparative: eer: 0.9978963732719421
+SENet: eer: -0.010745048522949219
+AIR_AM: eer: 0.7961243391036987
+lcnnFull: eer: 2.0050013065338135
+AASSIST: eer: 1.4938158988952637
+RawDarts: eer: 0.9611527323722839
+AIR: eer: 0.9917457103729248
+mlcg: eer: 0.3592711091041565
+SSNet: eer: 0.3997
+rawGAT_st: eer: 1.450256586074829
+darts: eer: 6.93690824508667
+Res2Net: eer: 0.8174083232879639
+mcg: eer: 0.09140881150960922
+AASSIST-L: eer: 1.763255000114441
+lcnnHalf: eer: 2.0069632530212402

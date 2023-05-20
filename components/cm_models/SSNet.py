@@ -122,7 +122,7 @@ class SSDNet1D(nn.Module):  # Res-TSSDNet
         self.out = nn.Linear(in_features=32, out_features=2)
 
     def forward(self, x, eval=False):
-        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn1(self.conv1(x.float())))
         x = F.max_pool1d(x, kernel_size=4)
 
         # stacked ResNet-Style Modules

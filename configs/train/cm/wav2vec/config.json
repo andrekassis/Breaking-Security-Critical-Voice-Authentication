@@ -1,0 +1,57 @@
+{
+    "system": "ADVCM",
+	"path": "trained_models/cm/WAV2VEC/train/model.pth",
+	"eer": -1.0878366231918335,
+	"logits": true,
+	"state_dict": null,
+    "arch": {
+	"type": "WAV2VEC",
+	"requires_device": true,
+        "args": {
+		"args": null
+		}
+    },
+    "loss": {
+        "type": "CEL",
+		"requires_device": true,
+	    "args": {
+	        "weights": [
+			    0.1, 
+			    0.9
+			]
+		}
+    },
+	"extractor": {
+		"fn": "Pad",
+		"args": {
+	        "max_len": 64600
+		}
+	},
+    "flip_label": false,
+	"training_parameters": {
+		"num_epochs": 100,
+		"data_loader": {
+			"batch_size": 14,
+			"shuffle": true,
+			"num_workers": 8,
+			"drop_last": true
+		},
+		"optimizer": {
+			"type": "Adam",
+			"params": {
+			  "lr": 0.000001,
+		          "weight_decay": 0.0001
+			}
+		},
+		"scheduler": {
+			"type": "WAV2VECScheduler",
+			"params": {}
+		},
+		"seed": 1234,
+		"no_best_epoch_num": 100,
+		"val_metric": "loss",
+		"eval_mode_for_validation": true,
+		"sampler": null,
+		"labels": "train.lab"
+	}
+}

@@ -1,4 +1,4 @@
-from .senet import se_resnet12
+from .senet import se_resnet12, se_resnet34
 from .lcnn import lcnn_net
 from .SSNet import SSDNet1D
 from .rawGAT_st import RawGAT_ST
@@ -6,6 +6,7 @@ from .Channel_wise_Gated_Res2Net import Detector
 from .darts import Darts
 from .air import AIR
 from .comp import Comp
+from .wav2vec import WAV2VEC
 
 ###################
 from .darts_raw import DartsRaw

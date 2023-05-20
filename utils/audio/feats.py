@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import librosa
 import numpy as np
 from .cqt import cqt
+from .preprocessing import trim_mid
 
 
 class _AxisMasking(torch.nn.Module):
@@ -337,7 +338,10 @@ class ASVLps(lps, torch.nn.Module):
     def forward(self, x):
         ret = lps.forward(self, x)
         idx = [torch.where(torch.sum(x, axis=1) > -60 * x.shape[1]) for x in ret]
-        ret = torch.stack([ret[i][idx[i]] for i in range(len(idx))])
+        ret = [ret[i][idx[i]] for i in range(len(idx))]
+        # print(ret[0])
+        if len(ret) == 1:
+            ret = torch.stack(ret)
         return ret
 
 
@@ -370,6 +374,52 @@ class CMLps(lps, torch.nn.Module):
         ret = lps.forward(self, x)
         ret = self.padder(ret)
         return ret
+
+
+class bandLPS(CMLps, torch.nn.Module):
+    def __init__(
+        self,
+        n_fft=1724,
+        hop_size=130,
+        window_length=1724,
+        ref=1.0,
+        amin=1e-30,
+        max_len=600,
+        power=2,
+        band="low",
+        sr=16000,
+        use_vad=False,
+        device="cuda:0",
+    ):
+        torch.nn.Module.__init__(self)
+        CMLps.__init__(
+            self,
+            n_fft=n_fft,
+            hop_size=hop_size,
+            window_length=window_length,
+            ref=ref,
+            amin=amin,
+            max_len=max_len,
+            power=power,
+            device=device,
+        )
+        self.sr = sr
+        self.band = band
+        self.use_vad = use_vad
+
+    def forward(self, x):
+        if self.use_vad:
+            x = trim_mid(
+                x.detach().cpu().numpy(),
+                frame_duration_ms=30,
+                aggressive=3,
+                sample_rate=self.sr,
+            )
+            x = torch.tensor(x).to(self.device)
+        x = CMLps.forward(self, x)
+        if self.band == "high":
+            return x[..., x.shape[-1] // 2 :]
+        return x[..., : x.shape[-1] // 2]
 
 
 class mfcc(lps, torch.nn.Module):
@@ -493,7 +543,7 @@ class CQT(torch.nn.Module):
         x = torch.reshape(
             F.pad(x, [1, 1], "constant"), (x.shape[0], 1, 1, int(x.shape[1]) + 2)
         )
-        x = F.conv2d(x, win).squeeze(1).squeeze(1)[:, :-1].type(torch.float64)
+        x = F.conv2d(x.float(), win).squeeze(1).squeeze(1)[:, :-1].type(torch.float64)
         ret = self._construct_slide_tensor(self._cqt(x))
         return ret.type(torch.float32).unsqueeze(1)
 
@@ -512,3 +562,119 @@ class CQT(torch.nn.Module):
         log_spec = 10.0 * torch.log10(m)
         log_spec -= 10.0 * torch.log10(torch.maximum(self.amin, self.ref_value))
         return log_spec
+
+
+class mel(torch.nn.Module):
+    def __init__(
+        self,
+        sampling_rate=16000,
+        n_fft=512,
+        hop_size=160,
+        window_length=400,
+        num_mels=40,
+        amin=1e-6,
+        top_db=30.0,
+        device="cuda:0",
+    ):
+        super().__init__()
+        self.device = device
+        self.n_fft = n_fft
+        self.hop_size = hop_size
+        self.window_length = window_length
+        self.amin = torch.tensor(amin, dtype=torch.float32, device=self.device)
+        self.top_db = top_db
+
+        self.mel_basis = torch.tensor(
+            librosa.filters.mel(sampling_rate, self.n_fft, n_mels=num_mels).astype(
+                np.float32
+            ),
+            device=device,
+        )
+
+        self.win = torch.hann_window(
+            self.window_length, device=device, requires_grad=False
+        )
+
+    def _forward(self, y):
+        spec = torch.stft(
+            y,
+            self.n_fft,
+            hop_length=self.hop_size,
+            win_length=self.window_length,
+            window=self.win,
+            center=True,
+            pad_mode="reflect",
+            normalized=False,
+            onesided=None,
+            return_complex=True,
+        )
+
+        S = (
+            torch.log10(torch.matmul(self.mel_basis, torch.abs(spec) ** 2) + self.amin)
+        ).permute(0, 2, 1)
+        return S
+
+    def _pad(self, y, length):
+        return [
+            [
+                F.pad(y_i, [0, length - y_i.shape[-1]])
+                if y_i.shape[-1] < length
+                else y_i
+                for y_i in y_curr
+            ]
+            for y_curr in y
+        ]
+
+    def _split(self, y, intervals, utts_per_spkr):
+        total = 0
+        ret = []
+        ret_curr = []
+        for i, interval in enumerate(intervals):
+            for interval_i in interval:
+                ret_curr.append(y[i].squeeze()[interval_i])
+                if len(ret_curr) == utts_per_spkr:
+                    ret.append(torch.stack(ret_curr))
+                    ret_curr = []
+        return torch.stack(ret)
+
+    def _intervals(self, y, length):
+        intervals = [
+            [
+                list(range(start, start + length))
+                for start in range(0, y_i.shape[-1], length // 2)
+                if start + length <= y_i.shape[-1]
+            ]
+            for y_i in y
+        ]
+        return intervals
+
+    def _get_intervals(self, y, intervals):
+        return [
+            y[i][interval]
+            for i, intervals_i in enumerate(intervals)
+            for interval in intervals_i
+        ]
+
+    def _stack(self, y, length):
+        y = self._pad(y, length)
+        intervals = [self._intervals(y_i, length) for y_i in y]
+        y = [
+            self._get_intervals(y[i], intervals_i)
+            for i, intervals_i in enumerate(intervals)
+        ]
+
+        lensMin = np.min([len(y_i) for y_i in y])
+        y = torch.stack([torch.stack(y_i[:lensMin]) for y_i in y])
+        return y
+
+    def forward(self, y, tisv_frame=None, intervals=None, utts_per_spkr=4):
+        if intervals is None:
+            assert tisv_frame is not None
+            length = tisv_frame * self.hop_size + self.window_length
+            y = self._stack(y, length)
+        else:
+            y = self._split(y, intervals, utts_per_spkr)
+
+        N, M = y.shape[0], y.shape[1]
+        y = self._forward(y.reshape((N * M, y.shape[-1])).float())
+        return y.reshape((N, M, y.shape[-2], y.shape[-1]))

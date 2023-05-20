@@ -23,8 +23,8 @@ class BaseModel(ABC):
     def get_score(self, x, ret_logits=True):
         pass
 
-    def get_feats(self, x):
-        return self.extract(x)
+    def get_feats(self, x, **kwargs):
+        return self.extract(x, **kwargs)
 
 
 class ADVCM(BaseModel):
@@ -72,15 +72,15 @@ class ADVSR(BaseModel):
     def _get_batch(self, batch_sz):
         perm = torch.randperm(self.t_ivector.size(0))
         idx = perm[:batch_sz]
-        return self.t_ivector[idx]
+        return self.t_ivector  # [idx]
 
     def attack_pipeline(self, x, y, aggregate=True):
-        batch = self._get_batch(30)  # batch_sz)
+        batch = self._get_batch(50)  # batch_sz)
         feats = self.get_feats(x)
         testivector = self._extract_ivector(feats)
         loss = self.model.ComputePLDAScore(batch, testivector)
-
         factor = torch.ones(y.shape, device=loss.device).unsqueeze(-1)
+
         factor[y == 1] = -1
         ret = loss * factor
 
