@@ -100,7 +100,8 @@ resemblyzer
 kaldi_io
 ```
 
-In addition, you will have to install kaldi - 
+In addition, you will have to install [kaldi](https://kaldi-asr.org/doc/install.html).
+
 Finally, you need to download and extract the pre-trained xvector model on the Voxceleb dataset. cd into blackBoxASV/xVector and download the model from [here](https://drive.google.com/file/d/1SW66KM17mmPly61wMPmRMKuCvz4WWQ-t/view?usp=share_link). Then execute:
 ```
 tar -zxvf xvector_nnet.tar.gz
