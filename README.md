@@ -4,13 +4,15 @@ Our paper has been accepted by 44th IEEE Symposium on Security and Privacy (IEEE
 
 If you use this work, please consider citing it as:
 ```
-@INPROCEEDINGS {chen2019real,
+@INPROCEEDINGS {kassis2023breaking,
     author = {Andre Kassis and Urs Hengartner},
-    booktitle = {2023 IEEE Symposium on Security and Privacy (SP)},
+    booktitle = {2023 IEEE Symposium on Security and Privacy (S&P)},
     title = {Breaking Security-Critical Voice Authentication},
     year = {2023}
 }
 ```
+
+## Demo sample are available [here] (https://drive.google.com/drive/folders/1LpyXdWo3O5qdGOitxqzn2wHxUDurXUh8).
 
 ## Requirements
 ```
@@ -27,7 +29,6 @@ pyyaml
 pydub
 webrtcvad
 scipy
-
 fairseq
 
 jiwer
@@ -40,7 +41,7 @@ kaldi_io
 
 ## Prepare Environment
 
- 1) To run the attacks, you will first need to download the ASVSpoof2019 Dataset available at https://drive.google.com/file/d/1_DzDEpEpWjavJ7YhWuYUkzuWuvDzUt55/view?usp=sharing 
+ 1) Download the ASVSpoof2019 Dataset from this [link] (https://drive.google.com/file/d/1_DzDEpEpWjavJ7YhWuYUkzuWuvDzUt55/view?usp=sharing)
  2) You need to download the pretrained CM and ASV models, which are available [here](https://drive.google.com/file/d/1qK1FLPokwwBKHyTMDYoStUxRenev3yn5/view?usp=sharing)
  3) Extract the downloaded tars in this directory: 
   ```
@@ -51,5 +52,5 @@ kaldi_io
 ## Run Adversarial Attacks
 To run the attacks, execute: 
 ```
-python attack.py --conf conf.yaml --device "cuda:0"
+python attack.py --device "cuda:0"
 ```
