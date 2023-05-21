@@ -12,7 +12,7 @@ If you use this work, please consider citing it as:
 }
 ```
 
-## Demo sample are available [here] (https://drive.google.com/drive/folders/1LpyXdWo3O5qdGOitxqzn2wHxUDurXUh8).
+## Demo sample are available [here](https://drive.google.com/drive/folders/1LpyXdWo3O5qdGOitxqzn2wHxUDurXUh8).
 
 ## Requirements
 ```
@@ -41,7 +41,7 @@ kaldi_io
 
 ## Prepare Environment
 
- 1) Download the ASVSpoof2019 Dataset from this [link] (https://drive.google.com/file/d/1_DzDEpEpWjavJ7YhWuYUkzuWuvDzUt55/view?usp=sharing)
+ 1) Download the ASVSpoof2019 Dataset from this [link](https://drive.google.com/file/d/1_DzDEpEpWjavJ7YhWuYUkzuWuvDzUt55/view?usp=sharing)
  2) You need to download the pretrained CM and ASV models, which are available [here](https://drive.google.com/file/d/1qK1FLPokwwBKHyTMDYoStUxRenev3yn5/view?usp=sharing)
  3) Extract the downloaded tars in this directory: 
   ```
