@@ -54,3 +54,21 @@ To run the attacks, execute:
 ```
 python attack.py --device "cuda:0"
 ```
+
+## Attack Configurations
+The (default) attack configuration file is found in inputs/conf.yaml. To reproduce the paper's results, do not change this file. You can also change the configurations in this file to experiment with different hyperparameters or baseline adversarial attacks.  
+
+Note: TIME_DOMAN_ATTACK stands for the known I-FGSM attack referenced in the paper, while the currently used attack is CM_Attack, which is the novel attack involving the transformations the paper introduces.
+
+## Training/testing models
+Although all pretrained models are available, you can train your own version of these models or even evaluate their performance on the relevant dataset using the train.py and test.py scripts (currently, training is only possible for CMs, while testing supports both ASVs and CMs).
+
+To train a CM, just run:
+```
+python train.py --config PATH_TO_CONFIG --system ADVCM --subset SUBSET --task cm --devices cuda:0,cuda:1
+```
+
+Where PATH_TO_CONFIG is the path to the configuration file of the relevent system - all the configuration files are located under "configs".
+SUBSET can either be "train" or "dev".
+
+
