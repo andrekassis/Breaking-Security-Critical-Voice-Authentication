@@ -54,19 +54,19 @@ def load_cm_asvspoof(modelSpec, device, load_checkpoint=True, loss=None):
         loss = config["loss"]
 
     if loss["requires_device"]:
-        loss_fn = getattr(loss_module, loss["type"])(device=device, **loss["args"])
+        loss_fn = getattr(module_loss, loss["type"])(device=device, **loss["args"])
     else:
-        loss_fn = getattr(loss_module, loss["type"])(**loss["args"])
+        loss_fn = getattr(module_loss, loss["type"])(**loss["args"])
 
     if hasattr(loss_fn, "it"):
         loss_fn.it = np.inf
 
     if config["arch"]["requires_device"]:
-        model = getattr(arch_module, config["arch"]["type"])(
+        model = getattr(module_arch, config["arch"]["type"])(
             device=device, **config["arch"]["args"]
         )
     else:
-        model = getattr(arch_module, config["arch"]["type"])(**config["arch"]["args"])
+        model = getattr(module_arch, config["arch"]["type"])(**config["arch"]["args"])
 
     loss = loss_fn
     extractor = getattr(feats, config["extractor"]["fn"])(
