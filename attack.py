@@ -310,10 +310,8 @@ def init(config, device, args, cont):
 
 
 def prepare_iter(sample, exp):
-    ref_adv = sample[-100:]
-
-    ref_test = list(set(sample[1:]) - set(ref_adv))
-    ref_fin = random.sample(ref_test, len(ref_test) * 2 // 3)
+    ref_test = sample[1:]
+    ref_fin = random.sample(ref_test, len(ref_test)*2//3)
     ref_test = list(set(ref_test) - set(ref_fin))
 
     with open(
